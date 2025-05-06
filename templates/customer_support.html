@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<h1>Orders</h1>
+
+
+<table id="support-table" class="table table-bordered">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Order #</th>
+      <th>Item</th>
+      <th>Billing Name</th>
+      <th>Phone</th>
+      <th>Street</th>
+      <th>City</th>
+      <th>Status</th>
+    </tr>
+    <tr class="filters">
+      <th><input type="text" class="form-control form-control-sm" placeholder="Search ID" /></th>
+      <th><input type="text" class="form-control form-control-sm" placeholder="Search Order #" /></th>
+      <th><input type="text" class="form-control form-control-sm" placeholder="Search Item" /></th>
+      <th><input type="text" class="form-control form-control-sm" placeholder="Search Name" /></th>
+      <th><input type="text" class="form-control form-control-sm" placeholder="Search Phone" /></th>
+      <th><input type="text" class="form-control form-control-sm" placeholder="Search Street" /></th>
+      <th><input type="text" class="form-control form-control-sm" placeholder="Search City" /></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+
+<script src="/static/js/support.js"></script>
+{% endblock %}

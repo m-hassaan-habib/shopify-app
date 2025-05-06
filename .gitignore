@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+
+# Env
+.env
+venv/
+ENV/
+*.env
+
+# Logs
+logs/
+*.log
+
+# Uploads / Temp
+uploads/
+*.csv
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+
+/uploads
+
+whatsapp_session/

@@ -1,0 +1,9 @@
+Flask
+python-dotenv
+pymysql
+Flask-WTF
+WTForms
+selenium
+webdriver-manager
+celery
+redis

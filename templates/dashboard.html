@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+<style>
+.metric-box {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    position: relative;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
+}
+.metric-box h6 {
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: #6c757d;
+}
+.metric-box .number {
+    font-size: 32px;
+    font-weight: bold;
+    color: #212529;
+}
+</style>
+
+<div class="container-fluid">
+    <form id="csvForm" enctype="multipart/form-data" class="mb-4">
+        <div class="row g-2">
+          <div class="col-auto">
+            <input type="file" name="file" id="csvFile" class="form-control" required>
+          </div>
+          <div class="col-auto">
+            <button type="submit" class="btn btn-success">Import CSV</button>
+          </div>
+        </div>
+    </form>
+    
+    <div class="row mb-4">
+        {% set stats = [
+            ('Total Orders', total_orders, 'total'),
+            ('Confirmed Orders', confirmed_orders, 'Confirmd'),
+            ('Cancelled Orders', cancelled_orders, 'Cancelled'),
+            ('Pending Orders', pending_orders, 'Pending'),
+            ('Not Responding', not_responding_orders, 'Not Responding'),
+            ('To Process', to_process_orders, 'To Process')
+        ] %}
+        {% for label, value, status in stats %}
+        <div class="col-md-2">
+            <a href="{{ url_for('routes.filtered_orders', status=status) }}" style="text-decoration: none;">
+                <div class="metric-box text-center">
+                    <h6>{{ label }}</h6>
+                    <div class="number">{{ value }}</div>
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card p-3 shadow-sm" style="height: 300px;">
+                <h6>Top Products</h6>
+                <canvas id="topProductsChart" style="max-height: 220px;"></canvas>
+            </div>
+        </div>
+        <div class="col-md-6 mb-4">
+            <div class="card p-3 shadow-sm" style="height: 300px;">
+                <h6>Orders by City</h6>
+                <canvas id="ordersCityChart" style="max-height: 220px;"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <a href="/delivery" class="text-decoration-none">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title mb-3">Delivery Management</h5>
+                    <p class="fs-1 text-primary"><i class="fas fa-truck"></i></p>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-6 mb-4">
+        <a href="/support" class="text-decoration-none">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title mb-3">Support Management</h5>
+                    <p class="fs-1 text-warning"><i class="fas fa-headset"></i></p>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="mb-4">
+        <button id="send-whatsapp-btn" class="btn btn-success">
+            <i class="fab fa-whatsapp"></i> Send WhatsApp Messages
+        </button>
+    </div>    
+</div>
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    new Chart(document.getElementById('topProductsChart'), {
+        type: 'bar',
+        data: {
+            labels: {{ top_products_labels | tojson }},
+            datasets: [{
+                label: 'Orders',
+                data: {{ top_products_counts | tojson }},
+                backgroundColor: [
+                    '#3b82f6', '#0ea5e9', '#f97316', '#16a34a', '#eab308'
+                ],
+                borderRadius: 6,
+                barThickness: 30
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ${context.parsed.y}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { stepSize: 1 }
+                },
+                x: {
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+    
+    
+
+    new Chart(document.getElementById("ordersCityChart"), {
+        type: "doughnut",
+        data: {
+            labels: {{ city_labels | safe }},
+            datasets: [{
+                label: "Orders by City",
+                data: {{ city_counts | safe }},
+                backgroundColor: [
+                    "#ff9f43", "#28c76f", "#00cfe8", "#7367f0", "#ea5455"
+                ],
+                borderRadius: 10,
+                spacing: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            cutout: "70%",  // controls inner circle
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        boxWidth: 15,
+                        padding: 10
+                    }
+                }
+            }
+        }
+    });
+    
+});
+
+$('#csvForm').submit(function(e) {
+    e.preventDefault();
+    let formData = new FormData(this);
+    $.ajax({
+        url: '/import',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: () => {
+            alert('CSV Imported');
+            location.reload();
+        },
+        error: () => alert('Import failed')
+    });
+});
+</script>
+
+<script>
+    $('#send-whatsapp-btn').click(function() {
+        $(this).prop('disabled', true).text("Sending...");
+        $.post('/send_whatsapp', function(res) {
+            alert(res.message);
+            $('#send-whatsapp-btn').prop('disabled', false).text("Send WhatsApp Messages");
+        }).fail(function() {
+            alert("Failed to send messages.");
+            $('#send-whatsapp-btn').prop('disabled', false).text("Send WhatsApp Messages");
+        });
+    });
+</script>
+{% endblock %}
