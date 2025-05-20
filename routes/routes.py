@@ -415,7 +415,7 @@ def send_whatsapp():
         options = Options()
         options.add_argument('--user-data-dir=./whatsapp_session')
         options.add_argument('--window-size=1920,1080')
-        # options.add_argument('--headless=new')
+        options.add_argument('--headless=new')
 
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
@@ -459,6 +459,7 @@ def send_whatsapp():
                         (o_num,)
                     )
                     c2.connection.commit()
+                    logger.info(f"Updated in DB")
             except Exception:
                 failed_numbers.append(phone)
             human_delay(5,3)

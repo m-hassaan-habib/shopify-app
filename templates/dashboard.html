@@ -110,7 +110,7 @@ document.addEventListener("DOMContentLoaded", function() {
         data: {
             labels: {{ top_products_labels | tojson }},
             datasets: [{
-                label: 'Orders',
+                label: '',
                 data: {{ top_products_counts | tojson }},
                 backgroundColor: [
                     '#3b82f6', '#0ea5e9', '#f97316', '#16a34a', '#eab308'
@@ -133,14 +133,19 @@ document.addEventListener("DOMContentLoaded", function() {
                 }
             },
             scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: { stepSize: 1 }
-                },
                 x: {
-                    grid: { display: false }
-                }
-            }
+                  grid: { display: false },
+                  ticks: {
+                    callback: function(_, idx) {
+                      const label = this.chart.data.labels[idx];
+                      return label.length > 12
+                        ? label.slice(0, 12) + '…'
+                        : label;
+                    }
+                  }
+                },
+                y: { beginAtZero: true, ticks: { stepSize: 1 } }
+              }
         }
     });
     
