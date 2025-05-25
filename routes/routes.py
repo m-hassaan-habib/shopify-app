@@ -48,13 +48,11 @@ intros = [
 ]
 
 order_lines = [
-    "Aap ne hamari website se {product} ka order diya tha, order number {order_num}.",
-    "{product} ka order mila hai jiska order number {order_num} hai.",
-    "Aap ny {product} ka order place kiya tha. Order #: {order_num}",
-    "We received your order for {product}, order number {order_num}.",
-    "You recently placed an order for {product}. Order #: {order_num}.",
-    "Aap ka order {product} with order number {order_num} hamay receive hua hai.",
-    "Hamain aap ka order {product} mila hai. Order #: {order_num}.",
+  "Aap ne hamari website se {product} ka order diya tha (Order #{order_num}) aur raqam PKR {price}.",
+  "{product} ka order mila hai—Order #{order_num}, amount: PKR {price}.",
+  "Aap ka order {product} (#{order_num}) humay receive hua hai. Total payment: PKR {price}.",
+  "We received your order for {product} (#{order_num}). Total: PKR {price}.",
+  "Your order #{order_num} of {product} has been placed. Amount due: PKR {price}.",
 ]
 
 confirmation_requests = [
@@ -79,11 +77,11 @@ closings = [
 ]
 
 
-def build_message(name, product, order_num):
+def build_message(name, product, order_num, price):
     return (
         f"{random.choice(greetings)}, *{name or 'Customer'}*,\n\n"
         f"{random.choice(intros)}\n\n"
-        f"{random.choice(order_lines).format(product=product, order_num=order_num)}\n\n"
+        f"{random.choice(order_lines).format(product=product, order_num=order_num, price=price)}\n\n"
         f"{random.choice(confirmation_requests)}\n\n"
         f"{random.choice(closings)}"
     )
@@ -409,7 +407,7 @@ def send_whatsapp():
 
     with conn.cursor() as cursor:
         cursor.execute(
-            "SELECT order_number, billing_name, item_name, billing_phone "
+            "SELECT order_number, billing_name, item_name, billing_phone, total "
             "FROM orders WHERE status IN ('To Process', 'Not Responding')"
         )
         users = cursor.fetchall()
@@ -431,7 +429,8 @@ def send_whatsapp():
             product = user['item_name'] or 'your product'
             phone   = user['billing_phone']
             o_num   = user['order_number']
-            message = build_message(name, product, o_num)
+            price   = user['total']
+            message = build_message(name, product, o_num, price)
             link    = f"https://web.whatsapp.com/send?phone={phone}"
 
             driver.execute_script(f"window.open('{link}','_blank');")

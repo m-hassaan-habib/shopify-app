@@ -95,7 +95,7 @@
     </div>
     <div class="mb-4 d-flex align-items-center gap-3 flex-wrap">
     <form id="send-whatsapp-form" class="d-flex gap-3">
-    <input type="checkbox" name="headless" id="headless" class="form-check-input">
+    <input type="checkbox" name="headless" id="headless" class="form-check-input" checked>
     <label for="headless" class="form-check-label">Use Same WhatsApp</label>
     <button type="button" id="send-whatsapp-btn" class="btn btn-success">
         <i class="fab fa-whatsapp"></i> Send WhatsApp Messages
@@ -220,7 +220,11 @@ $('#csvForm').submit(function(e) {
     e.preventDefault();
     const $btn = $(this).prop('disabled', true).text('Sending...');
     const payload = $('#send-whatsapp-form').serialize();
+    const btn2 = document.getElementById('confirm-btn');
+    const btn3 = document.getElementById('delete-btn');
 
+    btn2.disabled = true;
+    btn3.disabled = true;
     $.post('/send_whatsapp', payload)
         .done(function(res) {
         alert(res.message);
@@ -237,12 +241,9 @@ $('#csvForm').submit(function(e) {
     document.getElementById('send-whatsapp-form').addEventListener('submit', function(e) {
         const btn = document.getElementById('send-btn');
         const btn1 = document.getElementById('headless');
-        const btn2 = document.getElementById('confirm-btn');
-        const btn3 = document.getElementById('delete-btn');
+
         btn.disabled = true;
         btn1.disabled = true;
-        btn2.disabled = true;
-        btn3.disabled = true;
         btn.innerText = 'Sending...';
     });
 
