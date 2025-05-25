@@ -405,6 +405,8 @@ def update_courier(order_id):
 def send_whatsapp():
     failed_numbers = []
     conn = get_connection()
+    headless_mode = request.form.get("headless") is not None
+
     with conn.cursor() as cursor:
         cursor.execute(
             "SELECT order_number, billing_name, item_name, billing_phone "
@@ -415,8 +417,9 @@ def send_whatsapp():
         options = Options()
         options.add_argument('--user-data-dir=./whatsapp_session')
         options.add_argument('--window-size=1920,1080')
-        options.add_argument('--headless=new')
-
+        if headless_mode:
+            options.add_argument('--headless=new')
+            
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
         driver.get('https://web.whatsapp.com')
@@ -424,44 +427,49 @@ def send_whatsapp():
         batch_size = 2
 
         def send_in_tab(index, user):
-            name = user['billing_name'] or 'Customer'
+            name    = user['billing_name'] or 'Customer'
             product = user['item_name'] or 'your product'
-            phone = user['billing_phone']
-            o_num = user['order_number']
+            phone   = user['billing_phone']
+            o_num   = user['order_number']
             message = build_message(name, product, o_num)
-            link = f"https://web.whatsapp.com/send?phone={phone}"
+            link    = f"https://web.whatsapp.com/send?phone={phone}"
+
             driver.execute_script(f"window.open('{link}','_blank');")
             human_delay(2,1)
             driver.switch_to.window(driver.window_handles[-1])
             human_delay(10,5)
+
             try:
-                input_xpath = '//div[@contenteditable="true" and @data-tab="10"]'
-                msg_box = WebDriverWait(driver, 15).until(
-                    EC.presence_of_element_located((By.XPATH, input_xpath))
-                )
-                msg_box.click()
+                xpath = '//div[@contenteditable="true" and @data-tab="10"]'
+                box   = WebDriverWait(driver,15).until(EC.presence_of_element_located((By.XPATH, xpath)))
+                box.click(); human_delay(1,1)
+                box.clear()
+
+                parts = message.split("\n\n")
+
+                msg1 = f"{parts[0].strip()} {parts[1].strip()}" if len(parts) > 1 else parts[0].strip()
+
+                msg2 = " ".join(p.strip() for p in parts[2:])
+
+                box.send_keys(msg1)
+                box.send_keys(Keys.ENTER)
                 human_delay(1,1)
-                msg_box.clear()
-                parts = message.split("\n\n", 1)
-                greeting = parts[0]
-                body = parts[1] if len(parts) > 1 else ''
-                msg_box.send_keys(greeting)
-                msg_box.send_keys(Keys.ENTER)
-                human_delay(0.5,0.5)
-                for line in body.split("\n"):
-                    if line.strip():
-                        msg_box.send_keys(line.strip())
-                        msg_box.send_keys(Keys.ENTER)
-                        human_delay(0.5,0.5)
+
+                if msg2:
+                    box.send_keys(msg2)
+                    box.send_keys(Keys.ENTER)
+                    human_delay(1,1)
+
                 with get_connection().cursor() as c2:
-                    c2.execute(
-                        "UPDATE orders SET status='Confirmd' WHERE order_number=%s",
-                        (o_num,)
-                    )
+                    c2.execute("UPDATE orders SET status='Confirmd' WHERE order_number=%s", (o_num,))
                     c2.connection.commit()
-                    logger.info(f"Updated in DB")
-            except Exception:
+
+                logger.info(f"Sent message to {phone}")
+
+            except Exception as e:
                 failed_numbers.append(phone)
+                logger.error(f"Send failed for {phone}: {e}")
+
             human_delay(5,3)
             driver.close()
             human_delay(1,1)
@@ -481,6 +489,24 @@ def send_whatsapp():
         return jsonify({'error': str(e)}), 500
 
 
+@routes.route('/orders/confirm_all', methods=['POST'])
+def confirm_all_orders():
+    try:
+        conn = get_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                UPDATE orders 
+                SET status = 'Confirmd' 
+                WHERE status IN ('To Process', 'Not Responding')
+            """)
+            conn.commit()
+        flash("Yesterday orders marked as Confirmed", "success")
+    except Exception as e:
+        logger.exception("Bulk confirm failed")
+        flash(f"Error confirming orders: {str(e)}", "danger")
+
+    return redirect(url_for("routes.dashboard", status="total"))
+
 
 def send_multiline_message(msg_box, message):
     for line in message.split("\n"):
@@ -488,3 +514,18 @@ def send_multiline_message(msg_box, message):
             msg_box.send_keys(line.strip())
             msg_box.send_keys(Keys.ENTER)
             human_delay(0.5, 0.5)
+
+
+@routes.route('/orders/delete_all', methods=['POST'])
+def delete_all_orders():
+    try:
+        conn = get_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("DELETE FROM orders")
+            conn.commit()
+        flash("All orders deleted successfully", "warning")
+    except Exception as e:
+        logger.exception("Bulk delete failed")
+        flash(f"Error deleting orders: {str(e)}", "danger")
+
+    return redirect(url_for("routes.dashboard", status="total"))
