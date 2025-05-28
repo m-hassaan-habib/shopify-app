@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Edit {{ template.template_name }}</h2>
+
+<form method="POST">
+    <div id="template-fields">
+    {% for item in items %}
+    <div class="mb-2 d-flex align-items-center gap-2">
+        <input type="text" name="items" class="form-control" value="{{ item }}" required>
+        <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>
+    </div>
+    {% endfor %}
+    </div>
+
+    <button type="button" class="btn btn-secondary mb-3" onclick="addField()">+ Add New Line</button>
+    <br>
+    <button type="submit" class="btn btn-primary">Save</button>
+</form>
+
+<script>
+function addField(value = '') {
+    const container = document.getElementById("template-fields");
+    const div = document.createElement("div");
+    div.className = "mb-2 d-flex align-items-center gap-2";
+    div.innerHTML = `
+        <input type="text" name="items" class="form-control" value="${value}" required>
+        <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>
+    `;
+    container.appendChild(div);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>WhatsApp Templates</h2>
+<ul>
+  {% for t in templates %}
+    <li><a href="{{ url_for('routes.edit_template', tpl_id=t.id) }}">{{ t.template_name }}</a></li>
+  {% endfor %}
+</ul>
+{% endblock %}

@@ -18,6 +18,8 @@ import traceback
 import time
 import tempfile
 import random
+import json
+
 
 logger = get_logger("routes")
 
@@ -25,66 +27,23 @@ logger = get_logger("routes")
 routes = Blueprint("routes", __name__)
 
 
-
-greetings = [
-    "Assalam o Alaikum",
-    "Salam",
-    "Hello",
-    "Hi there",
-    "Dear Customer",
-    "Respected Customer",
-    "Good day",
-    "Warm greetings",
-]
-
-intros = [
-    "Hum Mihraaj Ventures se rabta kar rahe hain.",
-    "Aap se Mihraaj Ventures ki team baat kar rahi hai.",
-    "Yeh message Mihraaj Ventures ki taraf se hai.",
-    "We are reaching out from Mihraaj Ventures.",
-    "This is a follow-up from Mihraaj Ventures.",
-    "You’re receiving this message from Mihraaj Ventures regarding your recent order.",
-    "Ham aap se Mihraaj Ventures ki taraf se raabta kar rahe hain.",
-]
-
-order_lines = [
-  "Aap ne hamari website se {product} ka order diya tha (Order #{order_num}) aur raqam PKR {price}.",
-  "{product} ka order mila hai—Order #{order_num}, amount: PKR {price}.",
-  "Aap ka order {product} (#{order_num}) humay receive hua hai. Total payment: PKR {price}.",
-  "We received your order for {product} (#{order_num}). Total: PKR {price}.",
-  "Your order #{order_num} of {product} has been placed. Amount due: PKR {price}.",
-]
-
-confirmation_requests = [
-    "Meherbani kar ke order confirm kar dein.",
-    "Kindly order ki tasdeeq kar dein.",
-    "Barah-e-karam order ki confirmation kar dein.",
-    "Please confirm your order so we can proceed.",
-    "We kindly request you to confirm your order.",
-    "To process your order quickly, please confirm it.",
-    "Order confirm kar dein taake delivery jald shuru ki ja sake.",
-]
-
-closings = [
-    "Shukriya.",
-    "Bohat shukriya!",
-    "Allah Hafiz.",
-    "Thanks from Mihraaj Ventures!",
-    "We appreciate your response.",
-    "Looking forward to your confirmation.",
-    "Stay safe and thank you!",
-    "Thank you for choosing Mihraaj Ventures.",
-]
+def load_templates():
+    conn = get_connection()
+    with conn.cursor() as c:
+        c.execute("SELECT template_name, content FROM message_templates")
+        rows = c.fetchall()
+    return {r["template_name"]: json.loads(r["content"]) for r in rows}
 
 
-def build_message(name, product, order_num, price):
+def build_message(name, product, order_num, price, templates):
     return (
-        f"{random.choice(greetings)}, *{name or 'Customer'}*,\n\n"
-        f"{random.choice(intros)}\n\n"
-        f"{random.choice(order_lines).format(product=product, order_num=order_num, price=price)}\n\n"
-        f"{random.choice(confirmation_requests)}\n\n"
-        f"{random.choice(closings)}"
+        f"{random.choice(templates['greetings'])}, *{name or 'Customer'}*,\n\n"
+        f"{random.choice(templates['intros'])}\n\n"
+        f"{random.choice(templates['order_lines']).format(product=product, order_num=order_num, price=price)}\n\n"
+        f"{random.choice(templates['confirmation_requests'])}\n\n"
+        f"{random.choice(templates['closings'])}"
     )
+
 
 def human_delay(base=5, variation=3):
     time.sleep(base + random.uniform(0, variation))
@@ -425,12 +384,20 @@ def send_whatsapp():
         batch_size = 2
 
         def send_in_tab(index, user):
+            templates = load_templates()
+    
+            greetings = templates["greetings"]
+            intros = templates["intros"]
+            order_lines = templates["order_lines"]
+            confirmation_requests = templates["confirmation_requests"]
+            closings = templates["closings"]
+            
             name    = user['billing_name'] or 'Customer'
             product = user['item_name'] or 'your product'
             phone   = user['billing_phone']
             o_num   = user['order_number']
             price   = user['total']
-            message = build_message(name, product, o_num, price)
+            message = build_message(name, product, o_num, price, templates)
             link    = f"https://web.whatsapp.com/send?phone={phone}"
 
             driver.execute_script(f"window.open('{link}','_blank');")
@@ -528,3 +495,32 @@ def delete_all_orders():
         flash(f"Error deleting orders: {str(e)}", "danger")
 
     return redirect(url_for("routes.dashboard", status="total"))
+
+
+@routes.route('/templates')
+def list_templates():
+    conn = get_connection()
+    with conn.cursor() as c:
+        c.execute("SELECT * FROM message_templates")
+        tpl = c.fetchall()
+    return render_template('templates.html', templates=tpl)
+
+
+@routes.route('/templates/<int:tpl_id>', methods=['GET','POST'])
+def edit_template(tpl_id):
+    conn = get_connection()
+    if request.method == 'POST':
+        new_items = request.form.getlist('items')
+        new_content = json.dumps(new_items)
+        with conn.cursor() as c:
+            c.execute("UPDATE message_templates SET content=%s WHERE id=%s", (new_content, tpl_id))
+            conn.commit()
+        flash("Template updated", "success")
+        return redirect(url_for('routes.list_templates'))
+    with conn.cursor() as c:
+        c.execute("SELECT * FROM message_templates WHERE id=%s", (tpl_id,))
+        tpl = c.fetchone()
+        items = json.loads(tpl["content"])
+    return render_template('edit_template.html', template=tpl, items=items)
+
+

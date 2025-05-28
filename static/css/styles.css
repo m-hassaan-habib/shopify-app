@@ -1,3 +1,48 @@
+body.dark-mode {
+  background-color: #121212;
+  color: #f1f1f1;
+}
+
+body.dark-mode .navbar,
+body.dark-mode .card,
+body.dark-mode .metric-box,
+body.dark-mode .form-control,
+body.dark-mode input[type="file"],
+body.dark-mode select,
+body.dark-mode textarea {
+  background-color: #1e1e1e !important;
+  color: #f1f1f1 !important;
+  border-color: #333 !important;
+}
+
+body.dark-mode .btn-primary,
+body.dark-mode .btn-danger,
+body.dark-mode .btn-success {
+  color: #1e1e1e !important;
+}
+
+body.dark-mode .form-check-label {
+  color: #f1f1f1;
+}
+
+body.dark-mode .navbar {
+  border-bottom: 1px solid #333;
+}
+
+body.dark-mode .metric-box {
+  background: #1e1e1e !important;
+  box-shadow: 0 0 10px rgba(255,255,255,0.05);
+}
+
+body.dark-mode .metric-box h6 {
+  color: #bbb !important;
+}
+
+body.dark-mode .metric-box .number {
+  color: #f1f1f1 !important;
+}
+
+
 #orders-table th:first-child,
 #orders-table td:first-child {
   display: none;

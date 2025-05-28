@@ -31,3 +31,12 @@ CREATE TABLE IF NOT EXISTS orders (
     courier VARCHAR(255),
     shipping_status VARCHAR(255)
 );
+
+
+CREATE TABLE message_templates (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  template_name VARCHAR(50) NOT NULL UNIQUE,
+  content TEXT NOT NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP 
+               ON UPDATE CURRENT_TIMESTAMP
+);
