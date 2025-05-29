@@ -87,8 +87,19 @@ def filtered_orders(status):
 
 @routes.route('/')
 def dashboard():
+    page = int(request.args.get('page', 1))
+    per_page = 10
+    offset = (page - 1) * per_page
+    
     conn = get_connection()
     with conn.cursor() as cursor:
+        
+        cursor.execute("""
+            SELECT * FROM orders ORDER BY id DESC
+            LIMIT %s OFFSET %s
+        """, (per_page, offset))
+        orders = cursor.fetchall()
+        
         cursor.execute("SELECT COUNT(*) AS total FROM orders")
         total_orders = cursor.fetchone()['total']
 
@@ -122,6 +133,8 @@ def dashboard():
         cities = cursor.fetchall()
         city_labels = [r['billing_city'] for r in cities]
         city_counts = [r['count'] for r in cities]
+        
+        total_pages = (total_orders + per_page - 1)
 
     return render_template("dashboard.html",
         total_orders=total_orders,
@@ -133,7 +146,10 @@ def dashboard():
         top_products_labels=top_products_labels,
         top_products_counts=top_products_counts,
         city_labels=city_labels,
-        city_counts=city_counts
+        city_counts=city_counts,
+        orders=orders,
+        current_page=page,
+        total_pages=total_pages
     )
 
 

@@ -1,21 +1,34 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Edit {{ template.template_name }}</h2>
-
-<form method="POST">
-    <div id="template-fields">
-    {% for item in items %}
-    <div class="mb-2 d-flex align-items-center gap-2">
-        <input type="text" name="items" class="form-control" value="{{ item }}" required>
-        <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>
-    </div>
-    {% endfor %}
+<div class="bg-dark-custom p-4 rounded-3">
+    <div class="d-flex align-items-center mb-3">
+        <div class="bg-primary p-2 rounded me-2 d-flex justify-content-center align-items-center" style="background-color:#5a6ce6 !important; width:36px; height:36px;">
+            <i class="fas fa-edit text-white fs-5"></i>
+        </div>
+        <h2 class="mb-0 fw-semibold">Edit {{ template.template_name }}</h2>
     </div>
 
-    <button type="button" class="btn btn-secondary mb-3" onclick="addField()">+ Add New Line</button>
-    <br>
-    <button type="submit" class="btn btn-primary">Save</button>
-</form>
+    <form method="POST">
+        <div id="template-fields">
+            {% for item in items %}
+            <div class="mb-2 d-flex align-items-center gap-2">
+                <input type="text" name="items" class="form-control bg-dark-input border-secondary text-white" value="{{ item }}" required>
+                <button type="button" class="btn btn-delete btn-sm" onclick="this.parentElement.remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+
+        <button type="button" class="btn btn-outline-light btn-sm mb-3" onclick="addField()">
+            <i class="fas fa-plus me-1"></i> Add New Line
+        </button>
+        <br>
+        <button type="submit" class="btn btn-confirm">
+            <i class="fas fa-save me-1"></i> Save
+        </button>
+    </form>
+</div>
 
 <script>
 function addField(value = '') {
@@ -23,8 +36,10 @@ function addField(value = '') {
     const div = document.createElement("div");
     div.className = "mb-2 d-flex align-items-center gap-2";
     div.innerHTML = `
-        <input type="text" name="items" class="form-control" value="${value}" required>
-        <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>
+        <input type="text" name="items" class="form-control bg-dark-input border-secondary text-white" value="${value}" required>
+        <button type="button" class="btn btn-delete btn-sm" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
     `;
     container.appendChild(div);
 }
