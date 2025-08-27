@@ -8,6 +8,13 @@
         <h2 class="mb-0 fw-semibold">WhatsApp Templates</h2>
     </div>
 
+    <form method="POST" action="{{ url_for('routes.create_template') }}" class="mb-3">
+        <div class="d-flex gap-2">
+            <input type="text" name="template_name" class="form-control bg-dark-input border-secondary text-white" placeholder="New Template Name" required>
+            <button type="submit" class="btn btn-outline-light btn-sm">Create Template</button>
+        </div>
+    </form>
+
     <ul class="list-unstyled">
         {% for t in templates %}
         <li class="mb-2">

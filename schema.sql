@@ -29,7 +29,11 @@ CREATE TABLE IF NOT EXISTS orders (
     advance_delivery_charges VARCHAR(50),
     cod_amount FLOAT,
     courier VARCHAR(255),
-    shipping_status VARCHAR(255)
+    shipping_status VARCHAR(255),
+    notes TEXT,
+    preferred_courier VARCHAR(255),
+    tracking_number VARCHAR(255),
+    customer_type VARCHAR(255) DEFAULT NULL
 );
 
 
@@ -40,3 +44,24 @@ CREATE TABLE message_templates (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP 
                ON UPDATE CURRENT_TIMESTAMP
 );
+
+INSERT IGNORE INTO message_templates (template_name, content) VALUES
+('return_greetings', '["Hi", "Hello"]'),
+('return_intros', '["Your order was returned due to delivery issues."]'),
+('return_order_lines', '["Order details: {product}, #{order_num}, Rs. {price}"]'),
+('return_requests', '["Do you still need it? We can resend via another courier."]'),
+('return_closings', '["Please reply soon."]'),
+('cancelled_greetings', '["Hi", "Hello"]'),
+('cancelled_intros', '["We noticed your past order was cancelled."]'),
+('cancelled_order_lines', '["We have a new range of products now."]'),
+('cancelled_requests', '["Are you interested in checking them out?"]'),
+('cancelled_closings', '["Best regards."]'),
+('valued_greetings', '["Hi valued customer", "Hello"]'),
+('valued_intros', '["Thank you for your past high-value orders."]'),
+('valued_order_lines', '["Discover our latest products and exclusive bundles."]'),
+('valued_requests', '["Special deals just for you."]'),
+('valued_closings', '["Shop now!"]'),
+('tracking_greetings', '["Hi", "Hello"]'),
+('tracking_intros', '["Your order has been shipped."]'),
+('tracking_order_lines', '["Track your parcel with this number."]'),
+('tracking_closings', '["Happy shopping."]');
