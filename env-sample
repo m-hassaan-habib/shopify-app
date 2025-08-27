@@ -1,0 +1,6 @@
+FLASK_ENV=development
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=your-password
+DB_NAME=shopify_orders
+SECRET_KEY=supersecretkey
