@@ -12,3 +12,4 @@ DB_CONFIG = {
 }
 
 SECRET_KEY = os.getenv('SECRET_KEY')
+

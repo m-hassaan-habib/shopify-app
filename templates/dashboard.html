@@ -10,25 +10,29 @@
   <!-- Stats Cards -->
   <section class="row g-3 text-center mb-4 text-white">
     {% set stats = [
-        ('Total Orders', total_orders, 'fa-shopping-cart', 'bg-icon-cart'),
-        ('Confirmed', confirmed_orders, 'fa-check', 'bg-icon-confirmed'),
-        ('Cancelled', cancelled_orders, 'fa-times', 'bg-icon-cancelled'),
-        ('Pending', pending_orders, 'fa-clock', 'bg-icon-pending'),
-        ('Not Responding', not_responding_orders, 'fa-exclamation-triangle', 'bg-icon-notresponding'),
-        ('To Process', to_process_orders, 'fa-cube', 'bg-icon-toprocess')
+        ('Total Orders', total_orders, 'fa-shopping-cart', 'bg-icon-cart', 'total'),
+        ('Confirmed', confirmed_orders, 'fa-check', 'bg-icon-confirmed', 'Confirmed'),
+        ('Cancelled', cancelled_orders, 'fa-times', 'bg-icon-cancelled', 'Cancelled'),
+        ('Pending', pending_orders, 'fa-clock', 'bg-icon-pending', 'Pending'),
+        ('Not Responding', not_responding_orders, 'fa-exclamation-triangle', 'bg-icon-notresponding', 'Not Responding'),
+        ('To Process', to_process_orders, 'fa-cube', 'bg-icon-toprocess', 'To Process'),
+        ('Failed Delivery', failed_delivery_orders, 'fa-undo', 'bg-icon-failed', 'Failed Delivery'),
+        ('Valued Customers', valued_orders, 'fa-star', 'bg-icon-valued', 'Valued')
     ] %}
-    {% for label, value, icon, icon_class in stats %}
+    {% for label, value, icon, icon_class, filter in stats %}
     <div class="col-6 col-md-2">
-      <div class="bg-dark-custom p-3 rounded-3 d-flex flex-column align-items-center">
-        <div class="card-icon {{ icon_class }} mb-2"><i class="fas {{ icon }}"></i></div>
-        <div class="fs-2 fw-bold">{{ value }}</div>
-        <div class="small fw-semibold">{{ label }}</div>
-      </div>
+      <a href="{{ url_for('routes.filtered_orders', status=filter) }}" class="text-decoration-none text-white">
+        <div class="bg-dark-custom p-3 rounded-3 d-flex flex-column align-items-center">
+          <div class="card-icon {{ icon_class }} mb-2"><i class="fas {{ icon }}"></i></div>
+          <div class="fs-2 fw-bold">{{ value }}</div>
+          <div class="small fw-semibold">{{ label }}</div>
+        </div>
+      </a>
     </div>
     {% endfor %}
   </section>
 
-    <!-- Import Orders -->
+  <!-- Import Orders -->
   <section class="bg-dark-custom p-4 mb-4 rounded-3 text-white">
     <div class="d-flex align-items-center mb-3">
       <h5 class="mb-0 fw-semibold">Import Orders</h5>
@@ -69,7 +73,47 @@
       <label for="headless" class="form-check-label text-white">Use Same WhatsApp</label>
     </div>
     <button type="submit" id="send-whatsapp-btn" class="btn btn-outline-light btn-sm">
-      <i class="fab fa-whatsapp me-1"></i> Send Messages
+      <i class="fab fa-whatsapp me-1"></i> Send Confirmation Messages
+    </button>
+  </form>
+
+  <form id="send-return-form" method="post" action="/send_return_whatsapp" class="d-flex align-items-center gap-2 flex-wrap">
+    <div class="form-check form-switch mb-0">
+      <input type="checkbox" name="headless" id="headless-return" class="form-check-input" checked>
+      <label for="headless-return" class="form-check-label text-white">Use Same WhatsApp</label>
+    </div>
+    <button type="submit" class="btn btn-outline-light btn-sm">
+      <i class="fab fa-whatsapp me-1"></i> Send Return Messages
+    </button>
+  </form>
+
+  <form id="send-cancelled-form" method="post" action="/send_cancelled_whatsapp" class="d-flex align-items-center gap-2 flex-wrap">
+    <div class="form-check form-switch mb-0">
+      <input type="checkbox" name="headless" id="headless-cancelled" class="form-check-input" checked>
+      <label for="headless-cancelled" class="form-check-label text-white">Use Same WhatsApp</label>
+    </div>
+    <button type="submit" class="btn btn-outline-light btn-sm">
+      <i class="fab fa-whatsapp me-1"></i> Send Cancelled Messages
+    </button>
+  </form>
+
+  <form id="send-valued-form" method="post" action="/send_valued_whatsapp" class="d-flex align-items-center gap-2 flex-wrap">
+    <div class="form-check form-switch mb-0">
+      <input type="checkbox" name="headless" id="headless-valued" class="form-check-input" checked>
+      <label for="headless-valued" class="form-check-label text-white">Use Same WhatsApp</label>
+    </div>
+    <button type="submit" class="btn btn-outline-light btn-sm">
+      <i class="fab fa-whatsapp me-1"></i> Send Valued Messages
+    </button>
+  </form>
+
+  <form id="send-tracking-form" method="post" action="/send_tracking_whatsapp" class="d-flex align-items-center gap-2 flex-wrap">
+    <div class="form-check form-switch mb-0">
+      <input type="checkbox" name="headless" id="headless-tracking" class="form-check-input" checked>
+      <label for="headless-tracking" class="form-check-label text-white">Use Same WhatsApp</label>
+    </div>
+    <button type="submit" class="btn btn-outline-light btn-sm">
+      <i class="fab fa-whatsapp me-1"></i> Send Tracking Messages
     </button>
   </form>
 
@@ -83,8 +127,6 @@
   </div>
 </div>
 
-
-
     <table class="table mb-0">
       <thead>
         <tr>
@@ -93,6 +135,10 @@
           <th scope="col">Amount</th>
           <th scope="col">Date</th>
           <th scope="col">Status</th>
+          <th scope="col">Shipping Status</th>
+          <th scope="col">Courier</th>
+          <th scope="col">Tracking</th>
+          <th scope="col">Customer Type</th>
         </tr>
       </thead>
       <tbody>
@@ -103,10 +149,14 @@
           <td>PKR {{ order.total }}</td>
           <td>{{ order.created_at.strftime('%Y-%m-%d') }}</td>
           <td>{{ order.status }}</td>
+          <td>{{ order.shipping_status }}</td>
+          <td>{{ order.courier or order.preferred_courier }}</td>
+          <td>{{ order.tracking_number }}</td>
+          <td>{{ order.customer_type }}</td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="8">No orders found</td>
+          <td colspan="9">No orders found</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -124,12 +174,11 @@
   </div>
 </section>
 
-
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
-
 new Chart(document.getElementById('topProductsChart'), {
     type: 'line',
     data: {
@@ -146,7 +195,7 @@ new Chart(document.getElementById('topProductsChart'), {
             },
             {
                 label: 'Category B',
-                data: {{ top_products_counts | tojson }}, // replace with actual second layer if available
+                data: {{ top_products_counts | tojson }},
                 backgroundColor: 'rgba(14, 165, 233, 0.3)',
                 borderColor: '#0ea5e9',
                 fill: true,
@@ -192,8 +241,6 @@ new Chart(document.getElementById('topProductsChart'), {
     }
 });
 
-
-
 new Chart(document.getElementById("ordersCityChart"), {
     type: 'pie',
     data: {
@@ -203,7 +250,7 @@ new Chart(document.getElementById("ordersCityChart"), {
             data: {{ city_counts | safe }},
             backgroundColor: ["#ff9f43", "#28c76f", "#00cfe8", "#7367f0", "#ea5455"],
             borderWidth: 1,
-            borderColor: '#1e1e1e' // Dark border to match theme
+            borderColor: '#1e1e1e'
         }]
     },
     options: {
@@ -214,13 +261,12 @@ new Chart(document.getElementById("ordersCityChart"), {
                 labels: {
                     boxWidth: 15,
                     padding: 10,
-                    color: '#ffffff' // White text for dark theme
+                    color: '#ffffff'
                 }
             }
         }
     }
 });
-
 
 $('#csvForm').submit(function(e) {
     e.preventDefault();
@@ -238,12 +284,9 @@ $('#csvForm').submit(function(e) {
         error: () => alert('Import failed')
     });
 });
-</script>
 
-<script>
-    // Note: The WhatsApp form submission logic seems incomplete or mismatched (e.g., send-whatsapp-btn vs. send-btn).
-    // Updating to match the form structure.
-    $('form[action="/send_whatsapp"]').submit(function(e) {
+function handleWhatsappForm(formId, action) {
+    $(formId).submit(function(e) {
         e.preventDefault();
         const $btn = $(this).find('button').prop('disabled', true).text('Sending...');
         const payload = $(this).serialize();
@@ -251,7 +294,7 @@ $('#csvForm').submit(function(e) {
         const btn3 = document.getElementById('delete-btn');
         btn2.disabled = true;
         btn3.disabled = true;
-        $.post('/send_whatsapp', payload)
+        $.post(action, payload)
             .done(function(res) {
                 alert(res.message);
             })
@@ -259,17 +302,24 @@ $('#csvForm').submit(function(e) {
                 alert('Failed to send messages.');
             })
             .always(function() {
-                $btn.prop('disabled', false).text('Send WhatsApp Messages');
+                $btn.prop('disabled', false).text('Send Messages');
                 btn2.disabled = false;
                 btn3.disabled = false;
             });
     });
+}
+
+handleWhatsappForm('#send-whatsapp-form', '/send_whatsapp');
+handleWhatsappForm('#send-return-form', '/send_return_whatsapp');
+handleWhatsappForm('#send-cancelled-form', '/send_cancelled_whatsapp');
+handleWhatsappForm('#send-valued-form', '/send_valued_whatsapp');
+handleWhatsappForm('#send-tracking-form', '/send_tracking_whatsapp');
 </script>
 {% endblock %}
 
 <style>
 .bg-dark-custom {
-    margin-bottom: 1rem; ]
+    margin-bottom: 1rem;
 }
 .row > [class^="col-"] {
     padding-bottom: 1rem; 

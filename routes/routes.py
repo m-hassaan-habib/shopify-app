@@ -13,19 +13,14 @@ from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 from concurrent.futures import ThreadPoolExecutor
 from selenium.webdriver.common.keys import Keys
-
 import traceback
 import time
 import tempfile
 import random
 import json
 
-
 logger = get_logger("routes")
-
-
 routes = Blueprint("routes", __name__)
-
 
 def load_templates():
     conn = get_connection()
@@ -34,44 +29,70 @@ def load_templates():
         rows = c.fetchall()
     return {r["template_name"]: json.loads(r["content"]) for r in rows}
 
-
-def build_message(name, product, order_num, price, templates):
-    return (
-        f"{random.choice(templates['greetings'])}, *{name or 'Customer'}*,\n\n"
-        f"{random.choice(templates['intros'])}\n\n"
-        f"{random.choice(templates['order_lines']).format(product=product, order_num=order_num, price=price)}\n\n"
-        f"{random.choice(templates['confirmation_requests'])}\n\n"
-        f"{random.choice(templates['closings'])}"
-    )
-
+def build_message(name, product, order_num, price, tracking, templates, message_type='confirmation'):
+    if message_type == 'confirmation':
+        return (
+            f"{random.choice(templates.get('greetings', ['Hi']))}, *{name or 'Customer'}*,\n\n"
+            f"{random.choice(templates.get('intros', ['Thank you for your order']))}\n\n"
+            f"{random.choice(templates.get('order_lines', ['Your order: {product}'])).format(product=product, order_num=order_num, price=price)}\n\n"
+            f"{random.choice(templates.get('confirmation_requests', ['Please confirm']))}\n\n"
+            f"{random.choice(templates.get('closings', ['Best regards']))}"
+        )
+    elif message_type == 'return':
+        return (
+            f"{random.choice(templates.get('return_greetings', ['Hi']))}, *{name or 'Customer'}*,\n\n"
+            f"{random.choice(templates.get('return_intros', ['Your order was returned']))}\n\n"
+            f"{random.choice(templates.get('return_order_lines', ['Order: {product}'])).format(product=product, order_num=order_num, price=price)}\n\n"
+            f"{random.choice(templates.get('return_requests', ['Do you still need it? We can resend via another courier']))}\n\n"
+            f"{random.choice(templates.get('return_closings', ['Let us know']))}"
+        )
+    elif message_type == 'cancelled':
+        return (
+            f"{random.choice(templates.get('cancelled_greetings', ['Hi']))}, *{name or 'Customer'}*,\n\n"
+            f"{random.choice(templates.get('cancelled_intros', ['We noticed your order was cancelled']))}\n\n"
+            f"{random.choice(templates.get('cancelled_order_lines', ['But we have new products']))}\n\n"
+            f"{random.choice(templates.get('cancelled_requests', ['Are you interested?']))}\n\n"
+            f"{random.choice(templates.get('cancelled_closings', ['Check our range']))}"
+        )
+    elif message_type == 'valued':
+        return (
+            f"{random.choice(templates.get('valued_greetings', ['Hi valued customer']))}, *{name or 'Customer'}*,\n\n"
+            f"{random.choice(templates.get('valued_intros', ['Thanks for your past orders']))}\n\n"
+            f"{random.choice(templates.get('valued_order_lines', ['Check our latest products and bundles']))}\n\n"
+            f"{random.choice(templates.get('valued_requests', ['Special offers for you']))}\n\n"
+            f"{random.choice(templates.get('valued_closings', ['Shop now']))}"
+        )
+    elif message_type == 'tracking':
+        return (
+            f"{random.choice(templates.get('tracking_greetings', ['Hi']))}, *{name or 'Customer'}*,\n\n"
+            f"{random.choice(templates.get('tracking_intros', ['Your order is on the way']))}\n\n"
+            f"{random.choice(templates.get('tracking_order_lines', ['Track your parcel']))}\n\n"
+            f"Tracking number: {tracking}\n\n"
+            f"{random.choice(templates.get('tracking_closings', ['Happy shopping']))}"
+        )
 
 def human_delay(base=5, variation=3):
     time.sleep(base + random.uniform(0, variation))
-
 
 def safe_float(value, fallback=0.0):
     try:
         return float(value)
     except Exception as e:
-        if str(value).strip():  # don't log if it's just empty
+        if str(value).strip():
             logger.warning(f"Failed float cast: {value} → {e}")
         return fallback
-
 
 def parse_date(val):
     val = str(val).strip()
     if not val:
-        return datetime.datetime.now()  # Don’t warn for blanks
-
+        return datetime.datetime.now()
     for fmt in ['%Y-%m-%d %H:%M:%S %z', '%m/%d/%Y']:
         try:
             return datetime.datetime.strptime(val, fmt)
         except:
             continue
-
     logger.warning(f"Unrecognized date format: '{val}'")
     return datetime.datetime.now()
-
 
 @routes.route('/orders/status/<status>')
 def filtered_orders(status):
@@ -79,63 +100,47 @@ def filtered_orders(status):
     with conn.cursor() as cursor:
         if status == 'total':
             cursor.execute("SELECT * FROM orders ORDER BY id DESC")
+        elif status == 'Valued':
+            cursor.execute("SELECT * FROM orders WHERE customer_type = %s ORDER BY id DESC", (status,))
         else:
-            cursor.execute("SELECT * FROM orders WHERE status = %s ORDER BY id DESC", (status,))
+            cursor.execute("SELECT * FROM orders WHERE status = %s OR shipping_status = %s ORDER BY id DESC", (status, status))
         orders = cursor.fetchall()
     return render_template("orders.html", orders=orders, current_filter=status)
-
 
 @routes.route('/')
 def dashboard():
     page = int(request.args.get('page', 1))
     per_page = 10
     offset = (page - 1) * per_page
-    
     conn = get_connection()
     with conn.cursor() as cursor:
-        
-        cursor.execute("""
-            SELECT * FROM orders ORDER BY id DESC
-            LIMIT %s OFFSET %s
-        """, (per_page, offset))
+        cursor.execute("SELECT * FROM orders ORDER BY id DESC LIMIT %s OFFSET %s", (per_page, offset))
         orders = cursor.fetchall()
-        
         cursor.execute("SELECT COUNT(*) AS total FROM orders")
         total_orders = cursor.fetchone()['total']
-
-        cursor.execute("SELECT COUNT(*) AS confirmed FROM orders WHERE status = 'Confirmd'")
+        cursor.execute("SELECT COUNT(*) AS confirmed FROM orders WHERE status = 'Confirmed'")
         confirmed_orders = cursor.fetchone()['confirmed']
-
         cursor.execute("SELECT COUNT(*) AS cancelled FROM orders WHERE status = 'Cancelled'")
         cancelled_orders = cursor.fetchone()['cancelled']
-
         cursor.execute("SELECT COUNT(*) AS pending FROM orders WHERE status = 'Pending'")
         pending_orders = cursor.fetchone()['pending']
-
         cursor.execute("SELECT COUNT(*) AS not_responding FROM orders WHERE status = 'Not Responding'")
         not_responding_orders = cursor.fetchone()['not_responding']
-
         cursor.execute("SELECT COUNT(*) AS to_process FROM orders WHERE status = 'To Process'")
         to_process_orders = cursor.fetchone()['to_process']
-
-        cursor.execute("""
-            SELECT item_name, COUNT(*) as count
-            FROM orders GROUP BY item_name ORDER BY count DESC LIMIT 5
-        """)
+        cursor.execute("SELECT COUNT(*) AS failed_delivery FROM orders WHERE shipping_status = 'Failed Delivery'")
+        failed_delivery_orders = cursor.fetchone()['failed_delivery']
+        cursor.execute("SELECT COUNT(*) AS valued FROM orders WHERE customer_type = 'Valued'")
+        valued_orders = cursor.fetchone()['valued']
+        cursor.execute("SELECT item_name, COUNT(*) as count FROM orders GROUP BY item_name ORDER BY count DESC LIMIT 5")
         top_products = cursor.fetchall()
         top_products_labels = [r['item_name'] for r in top_products]
         top_products_counts = [r['count'] for r in top_products]
-
-        cursor.execute("""
-            SELECT billing_city, COUNT(*) as count
-            FROM orders GROUP BY billing_city ORDER BY count DESC LIMIT 5
-        """)
+        cursor.execute("SELECT billing_city, COUNT(*) as count FROM orders GROUP BY billing_city ORDER BY count DESC LIMIT 5")
         cities = cursor.fetchall()
         city_labels = [r['billing_city'] for r in cities]
         city_counts = [r['count'] for r in cities]
-        
-        total_pages = (total_orders + per_page - 1)
-
+        total_pages = (total_orders + per_page - 1) // per_page
     return render_template("dashboard.html",
         total_orders=total_orders,
         confirmed_orders=confirmed_orders,
@@ -143,6 +148,8 @@ def dashboard():
         pending_orders=pending_orders,
         not_responding_orders=not_responding_orders,
         to_process_orders=to_process_orders,
+        failed_delivery_orders=failed_delivery_orders,
+        valued_orders=valued_orders,
         top_products_labels=top_products_labels,
         top_products_counts=top_products_counts,
         city_labels=city_labels,
@@ -151,7 +158,6 @@ def dashboard():
         current_page=page,
         total_pages=total_pages
     )
-
 
 @routes.route('/orders')
 def orders():
@@ -176,16 +182,18 @@ def update_order(order_id):
                 discount_code=%s, discount_amount=%s, created_at=%s,
                 quantity=%s, item_name=%s, billing_name=%s, billing_phone=%s,
                 billing_street=%s, billing_city=%s, status=%s,
-                advance_delivery_charges=%s, cod_amount=%s, courier=%s, shipping_status=%s
+                advance_delivery_charges=%s, cod_amount=%s, courier=%s, shipping_status=%s,
+                notes=%s, preferred_courier=%s, tracking_number=%s, customer_type=%s
             WHERE id = %s
         """, (
-            data["order_source"], data["order_number"], data["subtotal"], data["shipping"],
-            float(data["subtotal"]) + float(data["shipping"]),
-            data["discount_code"], data["discount_amount"],
-            data["created_at"], data["quantity"], data["item_name"],
-            data["billing_name"], data["billing_phone"], data["billing_street"],
-            data["billing_city"], data["status"], data["advance_delivery_charges"],
-            data["cod_amount"], data["courier"], data["shipping_status"],
+            data.get("order_source", ''), data.get("order_number", ''), data.get("subtotal", 0), data.get("shipping", 0),
+            float(data.get("subtotal", 0)) + float(data.get("shipping", 0)),
+            data.get("discount_code", ''), data.get("discount_amount", 0),
+            data.get("created_at", ''), data.get("quantity", 0), data.get("item_name", ''),
+            data.get("billing_name", ''), data.get("billing_phone", ''),
+            data.get("billing_street", ''), data.get("billing_city", ''), data.get("status", ''),
+            data.get("advance_delivery_charges", ''), data.get("cod_amount", 0), data.get("courier", ''), data.get("shipping_status", ''),
+            data.get("notes", ''), data.get("preferred_courier", ''), data.get("tracking_number", ''), data.get("customer_type", ''),
             order_id
         ))
         conn.commit()
@@ -203,7 +211,6 @@ def update_order_status(order_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @routes.route('/order/<int:order_id>', methods=['DELETE'])
 def delete_order(order_id):
     conn = get_connection()
@@ -211,7 +218,6 @@ def delete_order(order_id):
         cursor.execute("DELETE FROM orders WHERE id = %s", (order_id,))
         conn.commit()
     return jsonify({"status": "deleted"})
-
 
 @routes.route('/order', methods=['POST'])
 def create_order():
@@ -221,20 +227,21 @@ def create_order():
         cursor.execute("""
             INSERT INTO orders (order_source, order_number, subtotal, shipping, total, discount_code,
             discount_amount, created_at, quantity, item_name, billing_name, billing_phone,
-            billing_street, billing_city, status, advance_delivery_charges, cod_amount, courier, shipping_status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            billing_street, billing_city, status, advance_delivery_charges, cod_amount, courier, shipping_status,
+            notes, preferred_courier, tracking_number, customer_type)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
-            data["order_source"], data["order_number"], data["subtotal"], data["shipping"],
-            float(data["subtotal"]) + float(data["shipping"]),
-            data["discount_code"], data["discount_amount"],
-            data["created_at"], data["quantity"], data["item_name"],
-            data["billing_name"], data["billing_phone"], data["billing_street"],
-            data["billing_city"], data["status"], data["advance_delivery_charges"],
-            data["cod_amount"], data["courier"], data["shipping_status"]
+            data.get("order_source", ''), data.get("order_number", ''), data.get("subtotal", 0), data.get("shipping", 0),
+            float(data.get("subtotal", 0)) + float(data.get("shipping", 0)),
+            data.get("discount_code", ''), data.get("discount_amount", 0),
+            data.get("created_at", ''), data.get("quantity", 0), data.get("item_name", ''),
+            data.get("billing_name", ''), data.get("billing_phone", ''),
+            data.get("billing_street", ''), data.get("billing_city", ''), data.get("status", ''),
+            data.get("advance_delivery_charges", ''), data.get("cod_amount", 0), data.get("courier", ''), data.get("shipping_status", ''),
+            data.get("notes", ''), data.get("preferred_courier", ''), data.get("tracking_number", ''), data.get("customer_type", '')
         ))
         conn.commit()
     return jsonify({"status": "success"})
-
 
 @routes.route('/import', methods=['POST'])
 def import_csv():
@@ -242,18 +249,14 @@ def import_csv():
         logger.info("IMPORT ROUTE HIT")
         file = request.files['file']
         filename = secure_filename(file.filename)
-
         upload_dir = "uploads"
         os.makedirs(upload_dir, exist_ok=True)
         filepath = os.path.join(upload_dir, filename)
         file.save(filepath)
-
         flash(f"CSV uploaded successfully: {filename}", "info")
         logger.info(f"File uploaded: {filepath}")
-
         conn = get_connection()
         rows = []
-
         with open(filepath, newline='', encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile)
             for idx, row in enumerate(reader, start=1):
@@ -263,7 +266,6 @@ def import_csv():
                     flash(f"Row {idx} date parsing failed: {row['Created at']} → {err}", "warning")
                     logger.warning(f"Row {idx} datetime parse failed: {err}")
                     created_at = datetime.datetime.now()
-
                 record = (
                     row.get('Order placed', 'Shopify'),
                     row.get('Order #', '').strip(),
@@ -283,20 +285,19 @@ def import_csv():
                     row.get('Advance Delivery Charges', '').strip(),
                     safe_float(row.get('COD Amount')),
                     row.get('Courier', '').strip(),
-                    row.get('Shipping Status', '').strip()
+                    row.get('Shipping Status', '').strip(),
+                    row.get('Notes from customer', '').strip(),
+                    row.get('Preferred Courier company', '').strip(),
+                    row.get('Tracking number', '').strip(),
+                    ''
                 )
-
-
-                if len(record) != 19:
+                if len(record) != 23:
                     logger.error(f"Skipping malformed row {idx} with {len(record)} fields: {record}")
                     flash(f"Skipping malformed row {idx} — field count is off", "danger")
                     continue
-
                 rows.append(record)
-
         logger.info(f"Parsed {len(rows)} valid rows from CSV")
         flash(f"Parsed {len(rows)} valid rows from CSV", "info")
-
         if rows:
             with conn.cursor() as cursor:
                 cursor.executemany("""
@@ -304,8 +305,9 @@ def import_csv():
                         order_source, order_number, subtotal, shipping, total,
                         discount_code, discount_amount, created_at, quantity, item_name,
                         billing_name, billing_phone, billing_street, billing_city, status,
-                        advance_delivery_charges, cod_amount, courier, shipping_status
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        advance_delivery_charges, cod_amount, courier, shipping_status,
+                        notes, preferred_courier, tracking_number, customer_type
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, rows)
                 conn.commit()
             flash("All rows inserted successfully", "success")
@@ -313,13 +315,10 @@ def import_csv():
         else:
             flash("No valid rows to insert", "danger")
             logger.warning("No valid rows found in CSV")
-
     except Exception as e:
         flash(f"Fatal error: {str(e)}", "danger")
         logger.exception("Error while importing CSV")
-
     return redirect(url_for('routes.orders'))
-
 
 @routes.route('/get_orders', methods=['GET'])
 def get_all_orders():
@@ -334,11 +333,9 @@ def get_all_orders():
         flash("Failed to load orders", "danger")
         return jsonify([]), 500
 
-
 @routes.route('/support')
 def support():
     return render_template("customer_support.html")
-
 
 @routes.route('/delivery')
 def delivery():
@@ -348,42 +345,60 @@ def delivery():
 def update_shipping_status(order_id):
     data = request.get_json()
     new_status = data.get('shipping_status')
-
     conn = get_connection()
     with conn.cursor() as cursor:
-        cursor.execute("""
-            UPDATE orders SET shipping_status = %s WHERE id = %s
-        """, (new_status, order_id))
+        cursor.execute("UPDATE orders SET shipping_status = %s WHERE id = %s", (new_status, order_id))
         conn.commit()
-
     return jsonify({"status": "updated"})
-
 
 @routes.route('/order/<int:order_id>/courier', methods=['PATCH'])
 def update_courier(order_id):
     data = request.get_json()
     new_status = data.get('courier')
-
     conn = get_connection()
     with conn.cursor() as cursor:
-        cursor.execute("""
-            UPDATE orders SET courier = %s WHERE id = %s
-        """, (new_status, order_id))
+        cursor.execute("UPDATE orders SET courier = %s WHERE id = %s", (new_status, order_id))
         conn.commit()
-
     return jsonify({"status": "updated"})
 
+@routes.route('/order/<int:order_id>/preferred_courier', methods=['PATCH'])
+def update_preferred_courier(order_id):
+    data = request.get_json()
+    new_preferred = data.get('preferred_courier')
+    conn = get_connection()
+    with conn.cursor() as cursor:
+        cursor.execute("UPDATE orders SET preferred_courier = %s WHERE id = %s", (new_preferred, order_id))
+        conn.commit()
+    return jsonify({"status": "updated"})
 
-@routes.route('/send_whatsapp', methods=['POST'])
-def send_whatsapp():
+@routes.route('/order/<int:order_id>/tracking_number', methods=['PATCH'])
+def update_tracking_number(order_id):
+    data = request.get_json()
+    new_tracking = data.get('tracking_number')
+    conn = get_connection()
+    with conn.cursor() as cursor:
+        cursor.execute("UPDATE orders SET tracking_number = %s WHERE id = %s", (new_tracking, order_id))
+        conn.commit()
+    return jsonify({"status": "updated"})
+
+@routes.route('/order/<int:order_id>/customer_type', methods=['PATCH'])
+def update_customer_type(order_id):
+    data = request.get_json()
+    new_type = data.get('customer_type')
+    conn = get_connection()
+    with conn.cursor() as cursor:
+        cursor.execute("UPDATE orders SET customer_type = %s WHERE id = %s", (new_type, order_id))
+        conn.commit()
+    return jsonify({"status": "updated"})
+
+def send_whatsapp_generic(message_type, where_clause, update_after_send=None):
     failed_numbers = []
     conn = get_connection()
     headless_mode = request.form.get("headless") is not None
-
     with conn.cursor() as cursor:
         cursor.execute(
-            "SELECT order_number, billing_name, item_name, billing_phone, total "
-            "FROM orders WHERE status IN ('To Process', 'Not Responding')"
+            f"SELECT order_number, billing_name, item_name, billing_phone, total, tracking_number "
+            f"FROM orders {where_clause}"
         )
         users = cursor.fetchall()
     try:
@@ -392,71 +407,52 @@ def send_whatsapp():
         options.add_argument('--window-size=1920,1080')
         if headless_mode:
             options.add_argument('--headless=new')
-            
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
         driver.get('https://web.whatsapp.com')
         time.sleep(15)
         batch_size = 2
-
         def send_in_tab(index, user):
             templates = load_templates()
-    
-            greetings = templates["greetings"]
-            intros = templates["intros"]
-            order_lines = templates["order_lines"]
-            confirmation_requests = templates["confirmation_requests"]
-            closings = templates["closings"]
-            
-            name    = user['billing_name'] or 'Customer'
+            name = user['billing_name'] or 'Customer'
             product = user['item_name'] or 'your product'
-            phone   = user['billing_phone']
-            o_num   = user['order_number']
-            price   = user['total']
-            message = build_message(name, product, o_num, price, templates)
-            link    = f"https://web.whatsapp.com/send?phone={phone}"
-
+            phone = user['billing_phone']
+            o_num = user['order_number']
+            price = user['total']
+            tracking = user.get('tracking_number', '')
+            message = build_message(name, product, o_num, price, tracking, templates, message_type)
+            link = f"https://web.whatsapp.com/send?phone={phone}"
             driver.execute_script(f"window.open('{link}','_blank');")
             human_delay(2,1)
             driver.switch_to.window(driver.window_handles[-1])
             human_delay(10,5)
-
             try:
                 xpath = '//div[@contenteditable="true" and @data-tab="10"]'
-                box   = WebDriverWait(driver,15).until(EC.presence_of_element_located((By.XPATH, xpath)))
+                box = WebDriverWait(driver,15).until(EC.presence_of_element_located((By.XPATH, xpath)))
                 box.click(); human_delay(1,1)
                 box.clear()
-
                 parts = message.split("\n\n")
-
                 msg1 = f"{parts[0].strip()} {parts[1].strip()}" if len(parts) > 1 else parts[0].strip()
-
                 msg2 = " ".join(p.strip() for p in parts[2:])
-
                 box.send_keys(msg1)
                 box.send_keys(Keys.ENTER)
                 human_delay(1,1)
-
                 if msg2:
                     box.send_keys(msg2)
                     box.send_keys(Keys.ENTER)
                     human_delay(1,1)
-
-                with get_connection().cursor() as c2:
-                    c2.execute("UPDATE orders SET status='Confirmd' WHERE order_number=%s", (o_num,))
-                    c2.connection.commit()
-
-                logger.info(f"Sent message to {phone}")
-
+                if update_after_send:
+                    with get_connection().cursor() as c2:
+                        c2.execute(update_after_send, (o_num,))
+                        c2.connection.commit()
+                logger.info(f"Sent {message_type} message to {phone}")
             except Exception as e:
                 failed_numbers.append(phone)
                 logger.error(f"Send failed for {phone}: {e}")
-
             human_delay(5,3)
             driver.close()
             human_delay(1,1)
             driver.switch_to.window(driver.window_handles[0])
-
         driver.execute_script("window.open('');")
         driver.switch_to.window(driver.window_handles[0])
         driver.get('https://web.whatsapp.com')
@@ -466,29 +462,42 @@ def send_whatsapp():
             for idx, user in enumerate(batch):
                 send_in_tab(idx, user)
         driver.quit()
-        return jsonify({'message': f'{len(users)} messages processed', 'failed_numbers': failed_numbers})
+        return jsonify({'message': f'{len(users)} {message_type} messages processed', 'failed_numbers': failed_numbers})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@routes.route('/send_whatsapp', methods=['POST'])
+def send_whatsapp():
+    return send_whatsapp_generic('confirmation', "WHERE status IN ('To Process', 'Not Responding')", "UPDATE orders SET status='Confirmed' WHERE order_number=%s")
+
+@routes.route('/send_return_whatsapp', methods=['POST'])
+def send_return_whatsapp():
+    return send_whatsapp_generic('return', "WHERE shipping_status = 'Failed Delivery'")
+
+@routes.route('/send_cancelled_whatsapp', methods=['POST'])
+def send_cancelled_whatsapp():
+    return send_whatsapp_generic('cancelled', "WHERE status = 'Cancelled'")
+
+@routes.route('/send_valued_whatsapp', methods=['POST'])
+def send_valued_whatsapp():
+    return send_whatsapp_generic('valued', "WHERE customer_type = 'Valued'")
+
+@routes.route('/send_tracking_whatsapp', methods=['POST'])
+def send_tracking_whatsapp():
+    return send_whatsapp_generic('tracking', "WHERE tracking_number != '' AND shipping_status = 'Shipped'")
 
 @routes.route('/orders/confirm_all', methods=['POST'])
 def confirm_all_orders():
     try:
         conn = get_connection()
         with conn.cursor() as cursor:
-            cursor.execute("""
-                UPDATE orders 
-                SET status = 'Confirmd' 
-                WHERE status IN ('To Process', 'Not Responding')
-            """)
+            cursor.execute("UPDATE orders SET status = 'Confirmed' WHERE status IN ('To Process', 'Not Responding')")
             conn.commit()
         flash("Yesterday orders marked as Confirmed", "success")
     except Exception as e:
         logger.exception("Bulk confirm failed")
         flash(f"Error confirming orders: {str(e)}", "danger")
-
     return redirect(url_for("routes.dashboard", status="total"))
-
 
 def send_multiline_message(msg_box, message):
     for line in message.split("\n"):
@@ -496,7 +505,6 @@ def send_multiline_message(msg_box, message):
             msg_box.send_keys(line.strip())
             msg_box.send_keys(Keys.ENTER)
             human_delay(0.5, 0.5)
-
 
 @routes.route('/orders/delete_all', methods=['POST'])
 def delete_all_orders():
@@ -509,9 +517,7 @@ def delete_all_orders():
     except Exception as e:
         logger.exception("Bulk delete failed")
         flash(f"Error deleting orders: {str(e)}", "danger")
-
     return redirect(url_for("routes.dashboard", status="total"))
-
 
 @routes.route('/templates')
 def list_templates():
@@ -520,7 +526,6 @@ def list_templates():
         c.execute("SELECT * FROM message_templates")
         tpl = c.fetchall()
     return render_template('templates.html', templates=tpl)
-
 
 @routes.route('/templates/<int:tpl_id>', methods=['GET','POST'])
 def edit_template(tpl_id):
@@ -539,4 +544,14 @@ def edit_template(tpl_id):
         items = json.loads(tpl["content"])
     return render_template('edit_template.html', template=tpl, items=items)
 
-
+@routes.route('/templates/new', methods=['POST'])
+def create_template():
+    template_name = request.form.get('template_name')
+    if template_name:
+        content = json.dumps([])
+        conn = get_connection()
+        with conn.cursor() as c:
+            c.execute("INSERT INTO message_templates (template_name, content) VALUES (%s, %s)", (template_name, content))
+            conn.commit()
+        flash("Template created", "success")
+    return redirect(url_for('routes.list_templates'))
