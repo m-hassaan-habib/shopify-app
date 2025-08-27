@@ -1,4 +1,3 @@
-# routes.py
 from flask import Blueprint, render_template, request, jsonify, redirect, flash, url_for
 from models.db import get_connection
 from werkzeug.utils import secure_filename
@@ -74,7 +73,7 @@ def build_message(name, product, order_num, price, templates, message_type='conf
             f"{random.choice(templates.get('tracking_greetings', ['Hi']))}, *{name or 'Customer'}*,\n\n"
             f"{random.choice(templates.get('tracking_intros', ['Your order is on the way']))}\n\n"
             f"{random.choice(templates.get('tracking_order_lines', ['Track your parcel']))}\n\n"
-            f"Tracking number: {order_num}\n\n"  # Using order_num as placeholder; actually use tracking_number in send
+            f"Tracking number: {order_num}\n\n"
             f"{random.choice(templates.get('tracking_closings', ['Happy shopping']))}"
         )
 
@@ -87,7 +86,7 @@ def safe_float(value, fallback=0.0):
     try:
         return float(value)
     except Exception as e:
-        if str(value).strip():  # don't log if it's just empty
+        if str(value).strip():
             logger.warning(f"Failed float cast: {value} → {e}")
         return fallback
 
@@ -95,7 +94,7 @@ def safe_float(value, fallback=0.0):
 def parse_date(val):
     val = str(val).strip()
     if not val:
-        return datetime.datetime.now()  # Don’t warn for blanks
+        return datetime.datetime.now()
 
     for fmt in ['%Y-%m-%d %H:%M:%S %z', '%m/%d/%Y']:
         try:
@@ -113,8 +112,10 @@ def filtered_orders(status):
     with conn.cursor() as cursor:
         if status == 'total':
             cursor.execute("SELECT * FROM orders ORDER BY id DESC")
+        elif status == 'Valued':
+            cursor.execute("SELECT * FROM orders WHERE customer_type = %s ORDER BY id DESC", (status,))
         else:
-            cursor.execute("SELECT * FROM orders WHERE status = %s ORDER BY id DESC", (status,))
+            cursor.execute("SELECT * FROM orders WHERE status = %s OR shipping_status = %s ORDER BY id DESC", (status, status))
         orders = cursor.fetchall()
     return render_template("orders.html", orders=orders, current_filter=status)
 
@@ -505,7 +506,7 @@ def send_whatsapp_generic(message_type, where_clause, update_after_send=None):
             tracking = user.get('tracking_number', '')
             message = build_message(name, product, o_num, price, templates, message_type)
             if message_type == 'tracking':
-                message = message.replace('{tracking_number}', tracking)  # Assume template has placeholder
+                message = message.replace('{tracking_number}', tracking)
             link    = f"https://web.whatsapp.com/send?phone={phone}"
 
             driver.execute_script(f"window.open('{link}','_blank');")
@@ -669,4 +670,3 @@ def create_template():
             conn.commit()
         flash("Template created", "success")
     return redirect(url_for('routes.list_templates'))
-

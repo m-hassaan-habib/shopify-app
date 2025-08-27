@@ -1,165 +1,86 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
+{% block title %}Orders{% endblock %}
 {% block content %}
 
-<h1>Orders</h1>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet"/>
 
-<table id="orders-table" class="table table-bordered">
-  <thead>
-    <tr>
-      <th>ID</th>
-      <th>Order #</th>
-      <th>Item</th>
-      <th>Billing Name</th>
-      <th>Phone</th>
-      <th>Street</th>
-      <th>City</th>
-      <th>Subtotal</th>
-      <th>Shipping</th>
-      <th>Total</th>
-      <th>Discount Code</th>
-      <th>Discount Amount</th>
-      <th>COD Amount</th>
-      <th>Advance Charges</th>
-      <th>Courier</th>
-      <th>Shipping Status</th>
-      <th>Status</th>
-      <th>Actions</th>
-    </tr>
-    <tr class="filters">
-      <th><input type="text" class="form-control form-control-sm" placeholder="Search ID" /></th>
-      <th><input type="text" class="form-control form-control-sm" placeholder="Search Order #" /></th>
-      <th><input type="text" class="form-control form-control-sm" placeholder="Search Item" /></th>
-      <th><input type="text" class="form-control form-control-sm" placeholder="Search Name" /></th>
-      <th><input type="text" class="form-control form-control-sm" placeholder="Search Phone" /></th>
-      <th><input type="text" class="form-control form-control-sm" placeholder="Search Street" /></th>
-      <th><input type="text" class="form-control form-control-sm" placeholder="Search City" /></th>
-      <th><input type="text" class="form-control form-control-sm" placeholder="Subtotal" /></th>
-      <th><input type="text" class="form-control form-control-sm" placeholder="Shipping" /></th>
-      <th><input type="text" class="form-control form-control-sm" placeholder="Total" /></th>
-      <th><input type="text" class="form-control form-control-sm" placeholder="Discount Code" /></th>
-      <th><input type="text" class="form-control form-control-sm" placeholder="Discount Amount" /></th>
-      <th><input type="text" class="form-control form-control-sm" placeholder="COD Amount" /></th>
-      <th><input type="text" class="form-control form-control-sm" placeholder="Advance Charges" /></th>
-      <th><input type="text" class="form-control form-control-sm" placeholder="Courier" /></th>
-      <th><input type="text" class="form-control form-control-sm" placeholder="Shipping Status" /></th>
-      <th></th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody></tbody>
-</table>
-
-<!-- Edit Modal (if used) -->
-<div class="modal fade" id="editModal" tabindex="-1" role="dialog">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Edit Order</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" id="edit-id">
-        <div class="mb-2">
-          <label>Item</label>
-          <input type="text" id="edit-item" class="form-control">
-        </div>
-        <div class="mb-2">
-          <label>Order #</label>
-          <input type="text" id="edit-order-number" class="form-control">
-        </div>        
-        <div class="mb-2">
-          <label>Status</label>
-          <input type="text" id="edit-status" class="form-control">
-        </div>
-        <div class="mb-2">
-          <label>City</label>
-          <input type="text" id="edit-city" class="form-control">
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button id="save-edit" class="btn btn-primary">Save</button>
-      </div>
-    </div>
+<div class="container-xl py-4">
+  <div class="bg-dark-custom p-4 rounded-3 text-white">
+    <h2 class="mb-4">Orders - {{ current_filter }}</h2>
+    <table class="table table-dark table-hover">
+      <thead>
+        <tr>
+          <th scope="col">Order #</th>
+          <th scope="col">Customer</th>
+          <th scope="col">Amount</th>
+          <th scope="col">Date</th>
+          <th scope="col">Status</th>
+          <th scope="col">Shipping Status</th>
+          <th scope="col">Courier</th>
+          <th scope="col">Tracking</th>
+          {% if current_filter == 'Confirmed' %}
+          <th scope="col">Customer Type</th>
+          <th scope="col">Action</th>
+          {% else %}
+          <th scope="col">Customer Type</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for order in orders %}
+        <tr>
+          <td>{{ order.order_number }}</td>
+          <td>{{ order.billing_name }}</td>
+          <td>PKR {{ order.total }}</td>
+          <td>{{ order.created_at.strftime('%Y-%m-%d') }}</td>
+          <td>{{ order.status }}</td>
+          <td>{{ order.shipping_status }}</td>
+          <td>{{ order.courier or order.preferred_courier }}</td>
+          <td>{{ order.tracking_number }}</td>
+          {% if current_filter == 'Confirmed' %}
+          <td>
+            <select class="form-select bg-dark-input border-secondary text-white customer-type" data-order-id="{{ order.id }}">
+              <option value="" {% if not order.customer_type %}selected{% endif %}>None</option>
+              <option value="Valued" {% if order.customer_type == 'Valued' %}selected{% endif %}>Valued</option>
+            </select>
+          </td>
+          <td>
+            <button class="btn btn-outline-light btn-sm update-customer-type" data-order-id="{{ order.id }}">Update</button>
+          </td>
+          {% else %}
+          <td>{{ order.customer_type }}</td>
+          {% endif %}
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="{% if current_filter == 'Confirmed' %}10{% else %}9{% endif %}">No orders found</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
 
-{% if orders %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
 $(document).ready(function() {
-    $('#orders-table').DataTable({
-        destroy: true,
-        data: {{ orders | tojson }},
-        columns: [
-            { data: 'id' },
-            { data: 'order_number' },
-            { data: 'item_name' },
-            { data: 'billing_name' },
-            { data: 'billing_phone' },
-            { data: 'billing_street' },
-            { data: 'billing_city' },
-            { data: 'subtotal' },
-            { data: 'shipping' },
-            { data: 'total' },
-            { data: 'discount_code' },
-            { data: 'discount_amount' },
-            { data: 'cod_amount' },
-            { data: 'advance_delivery_charges' },
-            { data: 'courier' },
-            { data: 'shipping_status' },
-            {
-                data: 'status',
-                render: function (data, type, row) {
-                    return `
-                        <select class="status-select form-control form-select-sm" data-id="${row.id}">
-                            <option ${data === 'Confirmed' ? 'selected' : ''}>Confirmed</option>
-                            <option ${data === 'Pending' ? 'selected' : ''}>Pending</option>
-                            <option ${data === 'Cancelled' ? 'selected' : ''}>Cancelled</option>
-                            <option ${data === 'Not Responding' ? 'selected' : ''}>Not Responding</option>
-                            <option ${data === 'To Process' ? 'selected' : ''}>To Process</option>
-                        </select>
-                    `;
-                }
-            },
-            {
-                data: null,
-                orderable: false,
-                render: function (data, type, row) {
-                    return `
-                        <button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}">Edit</button>
-                        <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Delete</button>
-                    `;
-                }
-            }
-        ],
-        orderCellsTop: true,
-        fixedHeader: true,
-        initComplete: function () {
-            let api = this.api();
-            api.columns().every(function (index) {
-                const header = $('thead tr.filters th').eq(index);
-                const input = header.find('input');
-                if (input.length) {
-                    input.on('keyup change', function () {
-                        api.column(index).search(this.value).draw();
-                    });
-                }
-            });
-            $('.status-select').select2({
-                minimumResultsForSearch: -1,
-                width: '100%',
-                dropdownAutoWidth: true
-            });
-        }
+  $('.update-customer-type').click(function() {
+    const orderId = $(this).data('order-id');
+    const customerType = $(this).closest('tr').find('.customer-type').val();
+    $.ajax({
+      url: `/order/${orderId}/customer_type`,
+      type: 'PATCH',
+      contentType: 'application/json',
+      data: JSON.stringify({ customer_type: customerType }),
+      success: function() {
+        alert('Customer type updated');
+      },
+      error: function() {
+        alert('Failed to update customer type');
+      }
     });
+  });
 });
 </script>
-{% else %}
-<script>
-$(document).ready(function() {
-    loadOrders();
-});
-</script>
-{% endif %}
-
-<script src="/static/js/order.js"></script>
 {% endblock %}
