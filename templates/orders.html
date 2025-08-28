@@ -2,85 +2,97 @@
 {% block title %}Orders{% endblock %}
 {% block content %}
 
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet"/>
+<div class="bg-white rounded-lg shadow p-6">
+  <!-- Header Row -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-3">
+    <div class="flex items-center gap-2 w-full md:w-1/2">
+      <input type="text" placeholder="Search orders, customers, or products..."
+             class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500">
+      <select class="border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500">
+        <option>All Statuses</option>
+        <option>Confirmed</option>
+        <option>Pending</option>
+        <option>Cancelled</option>
+        <option>Failed Delivery</option>
+        <option>Not Responding</option>
+        <option>Valued Customer</option>
+        <option>To Process</option>
+      </select>
+    </div>
+    <div class="flex items-center gap-2 justify-end">
+      <button class="bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-red-100">
+        Delete All
+      </button>
+      <button class="bg-green-600 text-white px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-green-700">
+        Confirm All
+      </button>
+    </div>
+  </div>
 
-<div class="container-xl py-4">
-  <div class="bg-dark-custom p-4 rounded-3 text-white">
-    <h2 class="mb-4">Orders - {{ current_filter }}</h2>
-    <table class="table table-dark table-hover">
-      <thead>
+  <!-- Orders Table -->
+  <div class="overflow-x-auto">
+    <table class="min-w-full border border-gray-200 rounded-lg overflow-hidden">
+      <thead class="bg-gray-50 text-xs font-semibold text-gray-600 uppercase border-b border-gray-200">
         <tr>
-          <th scope="col">Order #</th>
-          <th scope="col">Customer</th>
-          <th scope="col">Amount</th>
-          <th scope="col">Date</th>
-          <th scope="col">Status</th>
-          <th scope="col">Shipping Status</th>
-          <th scope="col">Courier</th>
-          <th scope="col">Tracking</th>
-          {% if current_filter == 'Confirmed' %}
-          <th scope="col">Customer Type</th>
-          <th scope="col">Action</th>
-          {% else %}
-          <th scope="col">Customer Type</th>
-          {% endif %}
+          <th class="px-4 py-2 text-left"><input type="checkbox"></th>
+          <th class="px-4 py-2 text-left">Order ID</th>
+          <th class="px-4 py-2 text-left">Customer</th>
+          <th class="px-4 py-2 text-left">Product</th>
+          <th class="px-4 py-2 text-left">Amount</th>
+          <th class="px-4 py-2 text-left">City</th>
+          <th class="px-4 py-2 text-left">Date</th>
+          <th class="px-4 py-2 text-left">Status</th>
+          <th class="px-4 py-2 text-left">Actions</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody class="divide-y divide-gray-100 text-sm">
         {% for order in orders %}
-        <tr>
-          <td>{{ order.order_number }}</td>
-          <td>{{ order.billing_name }}</td>
-          <td>PKR {{ order.total }}</td>
-          <td>{{ order.created_at.strftime('%Y-%m-%d') }}</td>
-          <td>{{ order.status }}</td>
-          <td>{{ order.shipping_status }}</td>
-          <td>{{ order.courier or order.preferred_courier }}</td>
-          <td>{{ order.tracking_number }}</td>
-          {% if current_filter == 'Confirmed' %}
-          <td>
-            <select class="form-select bg-dark-input border-secondary text-white customer-type" data-order-id="{{ order.id }}">
-              <option value="" {% if not order.customer_type %}selected{% endif %}>None</option>
-              <option value="Valued" {% if order.customer_type == 'Valued' %}selected{% endif %}>Valued</option>
-            </select>
+        <tr class="hover:bg-gray-50">
+          <td class="px-4 py-2"><input type="checkbox" value="{{ order.id }}"></td>
+          <td class="px-4 py-2 font-medium text-green-600">#{{ order.order_number }}</td>
+          <td class="px-4 py-2">{{ order.billing_name }}<br><span class="text-xs text-gray-500">{{ order.billing_phone }}</span></td>
+          <td class="px-4 py-2">{{ order.item_name }}</td>
+          <td class="px-4 py-2">${{ "%.2f"|format(order.total) }}</td>
+          <td class="px-4 py-2">{{ order.billing_city }}</td>
+          <td class="px-4 py-2">{{ order.created_at.strftime('%Y-%m-%d') }}</td>
+          <td class="px-4 py-2">
+            {% if order.status == 'Confirmed' %}
+              <span class="badge badge-confirmed">Confirmed</span>
+            {% elif order.status == 'Pending' %}
+              <span class="badge badge-pending">Pending</span>
+            {% elif order.status == 'Cancelled' %}
+              <span class="badge badge-cancelled">Cancelled</span>
+            {% elif order.shipping_status == 'Failed Delivery' %}
+              <span class="badge badge-failed">Failed Delivery</span>
+            {% elif order.status == 'Not Responding' %}
+              <span class="badge badge-notresponding">Not Responding</span>
+            {% elif order.customer_type == 'Valued' %}
+              <span class="badge badge-valued">Valued</span>
+            {% elif order.status == 'To Process' %}
+              <span class="badge badge-toprocess">To Process</span>
+            {% endif %}
           </td>
-          <td>
-            <button class="btn btn-outline-light btn-sm update-customer-type" data-order-id="{{ order.id }}">Update</button>
+          <td class="px-4 py-2">
+            <button class="bg-gray-50 text-gray-600 border border-gray-200 px-2 py-1 rounded-md text-xs hover:bg-gray-100">Update Status</button>
           </td>
-          {% else %}
-          <td>{{ order.customer_type }}</td>
-          {% endif %}
         </tr>
         {% else %}
         <tr>
-          <td colspan="{% if current_filter == 'Confirmed' %}10{% else %}9{% endif %}">No orders found</td>
+          <td colspan="9" class="text-center py-6 text-gray-400">No orders found</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+
+  <!-- Pagination -->
+  <div class="flex items-center justify-between mt-4 text-sm text-gray-600">
+    <p>Showing {{ orders|length }} of {{ total_orders }} orders</p>
+    <div class="flex gap-1">
+      <a href="?page={{ current_page-1 }}" class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 {% if current_page == 1 %}opacity-50 pointer-events-none{% endif %}">Previous</a>
+      <a href="?page={{ current_page+1 }}" class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 {% if current_page == total_pages %}opacity-50 pointer-events-none{% endif %}">Next</a>
+    </div>
+  </div>
 </div>
 
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script>
-$(document).ready(function() {
-  $('.update-customer-type').click(function() {
-    const orderId = $(this).data('order-id');
-    const customerType = $(this).closest('tr').find('.customer-type').val();
-    $.ajax({
-      url: `/order/${orderId}/customer_type`,
-      type: 'PATCH',
-      contentType: 'application/json',
-      data: JSON.stringify({ customer_type: customerType }),
-      success: function() {
-        alert('Customer type updated');
-      },
-      error: function() {
-        alert('Failed to update customer type');
-      }
-    });
-  });
-});
-</script>
 {% endblock %}
