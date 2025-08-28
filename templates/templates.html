@@ -9,11 +9,11 @@
       <h1 class="font-extrabold text-gray-900 text-lg leading-tight">WhatsApp Templates</h1>
       <p class="text-gray-500 text-xs mt-1 select-none">Manage your messaging templates and workflows</p>
     </div>
-    <form id="createTplForm" action="{{ url_for('routes.create_template') }}" method="post">
-      <button id="btnCreateTemplate" type="button" class="mt-4 sm:mt-0 inline-flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded px-3 py-2">
-        <i class="fas fa-plus"></i> Create Template
-      </button>
-    </form>
+    <a id="btnCreateTemplate"
+      href="{{ url_for('routes.create_template') }}"
+      class="mt-4 sm:mt-0 inline-flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded px-3 py-2">
+      <i class="fas fa-plus"></i> Create Template
+    </a>
   </div>
 
   <div class="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -185,28 +185,57 @@
       }
     });
   });
+</script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+  document.addEventListener('click', async (e) => {
+    const trigger = e.target.closest('#btnCreateTemplate');
+    if (!trigger) return;
 
-  document.getElementById('btnCreateTemplate')?.addEventListener('click', async () => {
-    const { value: name } = await Swal.fire({
-      title: 'New template name',
-      input: 'text',
-      inputPlaceholder: 'e.g. Order Confirmation',
-      showCancelButton: true,
-      confirmButtonColor: '#059669',
-            customClass: { popup: 'text-[1em]', confirmButton: 'text-[0.8em]' }
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Navigate to the create template page (GET /templates/new)
+    window.location.href = '{{ url_for("routes.create_template") }}';
+  });
+
+  document.querySelectorAll('.btn-preview').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-id');
+      const r = await fetch(`/templates/${id}/json`);
+      if (!r.ok) return Swal.fire({icon:'error', title:'Error', text:'Could not load template'});
+      const t = await r.json();
+      let body = '';
+      try {
+        const parsed = JSON.parse(t.content || '[]');
+        if (Array.isArray(parsed)) body = parsed.join('\n');
+        else body = String(parsed);
+      } catch(e) { body = t.content || ''; }
+      Swal.fire({
+        title: t.description || ('Template: ' + t.template_name),
+        html: `<pre style="text-align:left;white-space:pre-wrap;font-size:12px;background:#f3f4f6;padding:10px;border-radius:8px;color:#111827;">${(body||'').replace(/[<>&]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]))}</pre>`,
+        confirmButtonColor: '#059669',
+        customClass: { popup: 'text-[1em]', confirmButton: 'text-[0.8em]' }
+      });
     });
-    if (!name) return;
+  });
 
-    const fd = new FormData();
-    fd.append('template_name', name);
-    const res = await fetch('/templates/new', { method: 'POST', body: fd });
-    if (res.ok) {
-      Swal.fire({ icon: 'success', title: 'Created', timer: 900, showConfirmButton: false });
-      setTimeout(() => location.reload(), 800);
-    } else {
-      Swal.fire({ icon: 'error', title: 'Could not create template' });
-    }
+  document.querySelectorAll('.btn-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-id');
+      const ok = await Swal.fire({icon:'warning', title:'Delete this template?', showCancelButton:true, confirmButtonText:'Delete', confirmButtonColor:'#ef4444'});
+      if (!ok.isConfirmed) return;
+      const r = await fetch(`/templates/${id}/delete`, { method:'POST' });
+      if (r.ok) {
+        Swal.fire({icon:'success', title:'Deleted', timer:900, showConfirmButton:false});
+        setTimeout(() => location.reload(), 800);
+      } else {
+        Swal.fire({icon:'error', title:'Error', text:'Could not delete'});
+      }
+    });
   });
 </script>
+
 
 {% endblock %}

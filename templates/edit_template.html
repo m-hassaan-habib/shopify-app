@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Edit Template{% endblock %}
+{% block title %}{{ 'Create Template' if not template.id else 'Edit Template' }}{% endblock %}
 {% block content %}
 
 <main class="px-6 py-6 max-w-8l mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -12,13 +12,12 @@
         <i class="fas fa-arrow-left mr-2 text-xs"></i> Back to Templates
       </a>
       <div>
-        <h1 class="text-lg font-semibold text-gray-900">Edit Template</h1>
-        <p class="text-xs text-gray-500 -mt-1">Modify your existing template</p>
+        <h1 class="text-lg font-semibold text-gray-900">{{ 'Create Template' if not template.id else 'Edit Template' }}</h1>
+        <p class="text-xs text-gray-500 -mt-1">{{ 'Create a new messaging template' if not template.id else 'Modify your existing template' }}</p>
       </div>
     </div>
 
-    <form id="tplForm" method="post" class="space-y-6">
-      <!-- Keep status editable via hidden field so backend doesn’t overwrite -->
+    <form id="tplForm" method="post" action="{{ url_for('routes.create_template') if not template.id else url_for('routes.edit_template', tpl_id=template.id) }}" class="space-y-6">
       <input type="hidden" name="status" value="{{ template.status or 'Active' }}"/>
 
       <!-- Template Information -->
@@ -34,7 +33,7 @@
               Template Name <span class="text-red-500">*</span>
             </label>
             <input id="template-name" name="template_name" required
-                   value="{{ template.template_name }}"
+                   value="{{ template.template_name or '' }}"
                    class="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"/>
           </div>
           <div>
@@ -58,7 +57,7 @@
         </div>
       </fieldset>
 
-<!-- Message Content -->
+      <!-- Message Content -->
       <fieldset class="border border-gray-200 rounded-lg p-5 space-y-4" aria-labelledby="message-content-label">
         <legend id="message-content-label" class="flex justify-between items-center font-semibold text-gray-900 text-sm">
           <div class="flex items-center space-x-2">
@@ -72,7 +71,6 @@
         </legend>
 
         <div id="linesWrap" class="space-y-4">
-          {# Existing lines (use loop.index) #}
           {% for line in items %}
             <div>
               <label class="block text-xs font-semibold text-gray-400 mb-1 select-none">Line {{ loop.index }}</label>
@@ -80,17 +78,17 @@
                         class="line-input block w-full rounded-md border border-gray-300 px-3 py-2 text-xs text-gray-900 placeholder-gray-400 resize-none focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500">{{ line }}</textarea>
             </div>
           {% endfor %}
-
-          {# Pad up to 10 lines (range handles 0 or negative gracefully) #}
           {% set count = items|length %}
-          {% for i in range(2 - count) %}
-            <div>
-              <label class="block text-xs font-semibold text-gray-400 mb-1 select-none">Line {{ count + i + 1 }}</label>
-              <textarea rows="2" name="items"
-                        class="line-input block w-full rounded-md border border-gray-300 px-3 py-2 text-xs text-gray-900 placeholder-gray-400 resize-none focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
-                        placeholder="Enter message line {{ count + i + 1 }}..."></textarea>
-            </div>
-          {% endfor %}
+          {% if count < 2 %}
+            {% for i in range(2 - count) %}
+              <div>
+                <label class="block text-xs font-semibold text-gray-400 mb-1 select-none">Line {{ count + i + 1 }}</label>
+                <textarea rows="2" name="items"
+                          class="line-input block w-full rounded-md border border-gray-300 px-3 py-2 text-xs text-gray-900 placeholder-gray-400 resize-none focus:outline-none focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                          placeholder="Enter message line {{ count + i + 1 }}..."></textarea>
+              </div>
+            {% endfor %}
+          {% endif %}
         </div>
 
         <button type="button" id="btnAddLine"
@@ -160,7 +158,6 @@
 <!-- SweetAlert2 for modal preview -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-  // Helpers
   const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
   const $  = (s, r=document) => r.querySelector(s);
 
@@ -220,7 +217,7 @@
 
   // Floating preview modal
   document.getElementById('btnPreviewModal')?.addEventListener('click', () => {
-    const html = `<pre class="text-left text-xs bg-gray-100 rounded p-3 whitespace-pre-wrap">${withSample(collectLines().join('\\n')).replace(/</g,'&lt;')}</pre>`;
+    const html = `<pre class="text-left text-xs bg-gray-100 rounded p-3 whitespace-pre-wrap">${withSample(collectLines().join('\n')).replace(/</g,'&lt;')}</pre>`;
     Swal.fire({
       title: 'Preview',
       html,
@@ -230,20 +227,22 @@
   });
 
   // Save
-  document.getElementById('btnSave')?.addEventListener('click', () => {
-    // enforce required name/category
+  document.getElementById('btnSave')?.addEventListener('click', async () => {
     if (!$('#template-name')?.value.trim()) {
-      $('#template-name').focus(); return;
+      $('#template-name').focus();
+      Swal.fire({ icon: 'error', title: 'Template name is required', timer: 1500 });
+      return;
     }
     if (!$('#category')?.value) {
-      $('#category').focus(); return;
+      $('#category').focus();
+      Swal.fire({ icon: 'error', title: 'Category is required', timer: 1500 });
+      return;
     }
     document.getElementById('tplForm').submit();
   });
 
-  // Also re-render preview when name/desc/category change (not required but nice)
+  // Re-render preview on name/desc/category change
   $('#template-name')?.addEventListener('input', renderPreview);
   $('#description')?.addEventListener('input', renderPreview);
 </script>
-
 {% endblock %}

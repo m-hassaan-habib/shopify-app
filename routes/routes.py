@@ -208,7 +208,6 @@ def dashboard():
     )
 
 
-
 @routes.route('/orders')
 def orders():
     page = max(int(request.args.get('page', 1)), 1)
@@ -810,6 +809,13 @@ def preview_template(tpl_id):
     return jsonify({'preview': _preview_from_lines(lines)})
 
 
+@routes.route('/templates/preview', methods=['POST'])
+def preview_template_ephemeral():
+    data = request.get_json(silent=True) or {}
+    items = data.get('items') or []
+    return jsonify({"preview": _join_preview(items)})
+
+
 @routes.route('/templates/<int:tpl_id>/json')
 def template_json(tpl_id):
     conn = get_connection()
@@ -926,19 +932,61 @@ def edit_template(tpl_id):
     return render_template('edit_template.html', template=tpl, items=items)
 
 
-@routes.route('/templates/new', methods=['POST'])
+@routes.route('/templates/new', methods=['GET', 'POST'], endpoint='create_template')
 def create_template():
-    template_name = request.form.get('template_name')
-    if template_name:
-        content = json.dumps([])
+    if request.method == 'POST':
+        name = (request.form.get('template_name') or '').strip() or 'Untitled Template'
+        name = name[:50]  # DB limit safeguard
+        desc = (request.form.get('description') or '').strip()
+        cat = (request.form.get('category') or 'Orders').strip()
+        stat = (request.form.get('status') or 'Active').strip()
+        items = request.form.getlist('items') or []
+        content = json.dumps([s for s in items if str(s).strip()])
+
         conn = get_connection()
         with conn.cursor() as c:
-            c.execute("INSERT INTO message_templates (template_name, content) VALUES (%s, %s)", (template_name, content))
+            c.execute("""
+                INSERT INTO message_templates (template_name, description, category, status, content, updated_at)
+                VALUES (%s, %s, %s, %s, %s, NOW())
+            """, (name, desc, cat, stat, content))
             conn.commit()
+            c.execute("SELECT LAST_INSERT_ID() AS id")
+            new_id = c.fetchone()['id']
+
+        if 'application/json' in (request.headers.get('Accept') or '') or \
+           request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({"id": new_id, "edit_url": url_for('routes.edit_template', tpl_id=new_id)})
+
         flash("Template created", "success")
-    return redirect(url_for('routes.list_templates'))
+        return redirect(url_for('routes.edit_template', tpl_id=new_id))
+
+    # GET: Render edit_template.html with defaults
+    template = {
+        'id': None,
+        'template_name': '',
+        'description': '',
+        'category': 'Orders',
+        'status': 'Active',
+        'updated_at': None,
+        'created_at': None,
+    }
+    items = []
+    return render_template('edit_template.html', template=template, items=items)
 
 
 @routes.route('/customers')
 def customers():
     return render_template("customers.html")
+
+
+def _parse_lines(content):
+    try:
+        arr = json.loads(content or "[]")
+        if isinstance(arr, list):
+            return [str(x) for x in arr]
+    except Exception:
+        pass
+    return []
+
+def _join_preview(lines):
+    return "\n".join([s for s in (lines or []) if str(s).strip()])
