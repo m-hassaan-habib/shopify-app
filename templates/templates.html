@@ -1,57 +1,212 @@
 {% extends "base.html" %}
 {% block title %}WhatsApp Templates{% endblock %}
 {% block content %}
-<div class="space-y-6">
-  <!-- Header -->
-  <div class="flex justify-between items-center">
-    <h1 class="text-xl font-semibold text-gray-900">WhatsApp Templates</h1>
-    <a href="{{ url_for('routes.create_template') }}"
-       class="px-4 py-2 bg-green-500 text-white text-sm font-medium rounded hover:bg-green-600">
-      + Create Template
-    </a>
-  </div>
 
-  <!-- Filters -->
-  <div class="flex space-x-2 text-sm">
-    <button class="px-3 py-1 rounded-md bg-green-100 text-green-700 font-medium">All</button>
-    <button class="px-3 py-1 rounded-md hover:bg-gray-100">Orders</button>
-    <button class="px-3 py-1 rounded-md hover:bg-gray-100">Delivery</button>
-    <button class="px-3 py-1 rounded-md hover:bg-gray-100">Marketing</button>
-    <button class="px-3 py-1 rounded-md hover:bg-gray-100">Greetings</button>
-  </div>
 
-  <!-- Template Grid -->
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-    {% for tpl in templates %}
-    <div class="border rounded-lg p-4 bg-white shadow-sm">
-      <div class="flex justify-between items-start">
-        <div>
-          <h3 class="font-semibold text-gray-900">{{ tpl.template_name }}</h3>
-          <p class="text-sm text-gray-500 mt-1">{{ tpl.description or 'No description' }}</p>
-        </div>
-        <span class="px-2 py-0.5 text-xs rounded bg-green-100 text-green-700">Active</span>
-      </div>
-      <p class="text-gray-700 text-sm mt-3 line-clamp-3">{{ tpl.preview or '...' }}</p>
-      <div class="flex items-center justify-between mt-4 text-sm">
-        <span class="text-gray-500">{{ tpl.lines|length }} lines</span>
-        <span class="text-gray-400">Edited {{ tpl.updated_at.strftime("%d %b") }}</span>
-      </div>
-      <div class="flex items-center gap-2 mt-4">
-        <a href="{{ url_for('routes.edit_template', tpl_id=tpl.id) }}"
-           class="px-3 py-1.5 border rounded text-gray-700 hover:bg-gray-50">Edit</a>
-        <button class="px-3 py-1.5 border rounded text-gray-700 hover:bg-gray-50">Copy</button>
-
-      </div>
+<main class="px-6 mt-6 max-w-8l mx-auto">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+    <div class="max-w-xl">
+      <h1 class="font-extrabold text-gray-900 text-lg leading-tight">WhatsApp Templates</h1>
+      <p class="text-gray-500 text-xs mt-1 select-none">Manage your messaging templates and workflows</p>
     </div>
-    {% endfor %}
+    <form id="createTplForm" action="{{ url_for('routes.create_template') }}" method="post">
+      <button id="btnCreateTemplate" type="button" class="mt-4 sm:mt-0 inline-flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded px-3 py-2">
+        <i class="fas fa-plus"></i> Create Template
+      </button>
+    </form>
   </div>
 
-  <!-- Stats Footer -->
-  <div class="grid grid-cols-4 text-center border-t pt-4 text-sm text-gray-600">
-    <div><span class="font-semibold">{{ templates|length }}</span><br>Total Templates</div>
-    <div><span class="font-semibold">7</span><br>Active Templates</div>
-    <div><span class="font-semibold">1</span><br>Draft Templates</div>
-    <div><span class="font-semibold">4</span><br>Categories</div>
+  <div class="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+    <div aria-label="Template categories filter" class="rounded-lg border border-gray-200 bg-white max-w-full overflow-x-auto" role="group">
+      {% set cats = ['All','Orders','Delivery','Marketing','Greetings'] %}
+      {% for c in cats %}
+        {% set pressed = 'true' if category==c else 'false' %}
+        <a href="{{ url_for('routes.list_templates', category=c, status=status, q=q, page=1) }}"
+           aria-pressed="{{ pressed }}"
+           class="inline-block m-2 min-w-[48px] text-center rounded px-3 py-1 text-xs select-none
+                  {% if category==c %} bg-green-600 text-white font-semibold
+                  {% else %} bg-white text-gray-700 border border-gray-300 font-normal{% endif %}">
+          {{ c }}
+        </a>
+      {% endfor %}
+    </div>
+
+    <form method="get" class="flex items-center gap-2">
+      <input type="hidden" name="category" value="{{ category }}">
+      <input type="hidden" name="status" value="{{ status }}">
+      <input type="search" name="q" value="{{ q or '' }}" placeholder="Search templates…"
+             class="w-64 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500">
+      <button class="hidden sm:inline-flex items-center gap-1 border border-gray-300 rounded-md px-3 py-2 text-xs text-gray-700 hover:bg-gray-50" type="submit">
+        <i class="fas fa-search text-[10px]"></i> Search
+      </button>
+    </form>
   </div>
-</div>
+
+  <section aria-label="WhatsApp message templates" class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+    {% for t in templates %}
+    <article aria-labelledby="template{{ t.id }}-title" class="border border-gray-200 rounded-lg p-5 flex flex-col justify-between bg-white max-w-md">
+      <div>
+        <div class="flex items-start space-x-3 mb-1">
+          {% set img = 'https://storage.googleapis.com/a1aa/image/e80d749a-e9f0-422d-b378-f26c20929652.jpg' %}
+          {% if (t.category or '').lower()=='delivery' %}{% set img='https://storage.googleapis.com/a1aa/image/b98b1b54-26be-4925-f5f2-c83200d6aecc.jpg' %}{% endif %}
+          {% if (t.category or '').lower()=='marketing' %}{% set img='https://storage.googleapis.com/a1aa/image/8087566f-000e-43af-d807-60aa297e4b2b.jpg' %}{% endif %}
+          {% if (t.category or '').lower()=='greetings' %}{% set img='https://storage.googleapis.com/a1aa/image/cd4a73bc-98e9-4b23-b2d8-59375b52f9b3.jpg' %}{% endif %}
+          <img alt="{{ t.category or 'Orders' }} emoji" aria-hidden="true" class="w-5 h-5 mt-1 flex-shrink-0" height="20" src="{{ img }}" width="20"/>
+          <div class="flex-1 min-w-0">
+            <h2 class="font-semibold text-gray-900 text-sm leading-tight" id="template{{ t.id }}-title">{{ t.display_title }}</h2>
+            <p class="text-xs text-gray-600 mt-1 leading-tight select-none max-w-full">{{ t.description or ('Template: ' ~ t.template_name) }}</p>
+          </div>
+          <div class="flex flex-col space-y-1 flex-shrink-0 ml-3">
+            <span class="text-[10px] font-semibold rounded-full px-2 py-0.5 select-none whitespace-nowrap
+                         {% if (t.category or 'Orders')=='Delivery' %} text-orange-500 bg-orange-100
+                         {% elif (t.category or 'Orders')=='Marketing' %} text-blue-500 bg-blue-100
+                         {% elif (t.category or 'Orders')=='Greetings' %} text-green-600 bg-green-100
+                         {% else %} text-green-600 bg-green-100 {% endif %}">
+              {{ t.category or 'Orders' }}
+            </span>
+            <span class="text-[10px] font-semibold rounded-full px-2 py-0.5 select-none whitespace-nowrap
+                         {% if t.status=='Active' %} text-green-600 bg-green-100
+                         {% else %} text-gray-500 bg-gray-200 {% endif %}">
+              {{ t.status }}
+            </span>
+          </div>
+        </div>
+        
+        <div class="bg-gray-100 rounded-md mt-4 p-4 text-xs text-gray-700 font-mono max-w-full break-words select-text">
+          {{ t.preview_text }}{% if t.preview_text|length == 120 %}…{% endif %}
+        </div>
+      </div>
+      <div class="mt-3 flex items-center justify-between text-gray-400 text-[10px] select-none">
+        <span>{{ t.lines_count }} lines</span>
+        <span>{% set stamp = t.updated_at or t.created_at %}{% if stamp %}Edited {{ stamp.strftime('%d %b %Y') }}{% else %}—{% endif %}</span>
+      </div>
+      <div class="mt-2 flex space-x-2 text-gray-500 text-xs">
+        <a href="{{ url_for('routes.edit_template', tpl_id=t.id) }}" class="flex items-center gap-1 rounded border border-gray-300 px-3 py-1 hover:bg-gray-50">
+          <i class="fas fa-edit text-[10px]"></i> Edit
+        </a>
+        <button type="button" data-id="{{ t.id }}" class="btn-preview flex items-center gap-1 rounded border border-gray-300 px-3 py-1 hover:bg-gray-50" aria-label="Preview template">
+          <i class="fas fa-eye text-[10px]"></i>
+        </button>
+        <button type="button" data-id="{{ t.id }}" class="btn-duplicate flex items-center gap-1 rounded border border-gray-300 px-3 py-1 hover:bg-gray-50" aria-label="Duplicate template">
+          <i class="fas fa-copy text-[10px]"></i>
+        </button>
+        <button type="button" data-id="{{ t.id }}" class="btn-delete flex items-center gap-1 rounded border border-gray-300 px-3 py-1 text-red-600 hover:bg-red-50" aria-label="Delete template">
+          <i class="fas fa-trash-alt text-[10px]"></i>
+        </button>
+      </div>
+    </article>
+    {% else %}
+      <div class="col-span-full text-center text-sm text-gray-500">No templates found.</div>
+    {% endfor %}
+  </section>
+
+  <div class="flex justify-between items-center text-[10px] text-gray-600 mt-6 select-none flex-wrap gap-2">
+    <div>Showing {{ templates|length }} of {{ total }} templates</div>
+    <nav class="inline-flex items-center space-x-1" aria-label="Pagination">
+      <a href="{{ url_for('routes.list_templates', q=q, category=category, status=status, page=(current_page-1)) }}"
+         class="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50 text-gray-700 {% if current_page==1 %}pointer-events-none opacity-50{% endif %}">
+        Previous
+      </a>
+      <span class="px-2">Page {{ current_page }} / {{ total_pages }}</span>
+      <a href="{{ url_for('routes.list_templates', q=q, category=category, status=status, page=(current_page+1)) }}"
+         class="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50 text-gray-700 {% if current_page==total_pages or total_pages==0 %}pointer-events-none opacity-50{% endif %}">
+        Next
+      </a>
+    </nav>
+  </div>
+
+  <section aria-label="Templates summary statistics" class="mt-10 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 max-w-full">
+    <div aria-label="Total Templates" class="border border-gray-200 rounded-lg p-6 text-center bg-white select-none">
+      <p class="text-green-600 font-extrabold text-lg leading-none">{{ total_templates }}</p>
+      <p class="text-gray-600 text-xs mt-1 font-semibold">Total Templates</p>
+    </div>
+    <div aria-label="Active Templates" class="border border-gray-200 rounded-lg p-6 text-center bg-white select-none">
+      <p class="text-green-600 font-extrabold text-lg leading-none">{{ active_templates }}</p>
+      <p class="text-gray-600 text-xs mt-1 font-semibold">Active Templates</p>
+    </div>
+    <div aria-label="Draft Templates" class="border border-gray-200 rounded-lg p-6 text-center bg-white select-none">
+      <p class="text-orange-400 font-extrabold text-lg leading-none">{{ draft_templates }}</p>
+      <p class="text-gray-600 text-xs mt-1 font-semibold">Draft Templates</p>
+    </div>
+    <div aria-label="Categories" class="border border-gray-200 rounded-lg p-6 text-center bg-white select-none">
+      <p class="text-blue-600 font-extrabold text-lg leading-none">{{ categories_count }}</p>
+      <p class="text-gray-600 text-xs mt-1 font-semibold">Categories</p>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+  document.querySelectorAll('.btn-preview').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-id');
+      const r = await fetch(`/templates/${id}/json`);
+      if (!r.ok) return Swal.fire({icon:'error', title:'Error', text:'Could not load template'});
+      const t = await r.json();
+      let body = '';
+      try {
+        const parsed = JSON.parse(t.content || '[]');
+        if (Array.isArray(parsed)) body = parsed.join('\\n');
+        else body = String(parsed);
+      } catch(e){ body = t.content || ''; }
+      Swal.fire({
+        title: t.description || ('Template: ' + t.template_name),
+        html: `<pre style="text-align:left;white-space:pre-wrap;font-size:12px;background:#f3f4f6;padding:10px;border-radius:8px;color:#111827;">${(body||'').replace(/[<>&]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]))}</pre>`,
+        confirmButtonColor: '#059669',
+        customClass: { popup: 'text-[1em]', confirmButton: 'text-[0.8em]' }
+      });
+    });
+  });
+
+  document.querySelectorAll('.btn-duplicate').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-id');
+      const r = await fetch(`/templates/${id}/duplicate`, { method:'POST' });
+      if (r.ok) {
+        Swal.fire({icon:'success', title:'Duplicated', timer:1200, showConfirmButton:false});
+        setTimeout(()=>location.reload(), 1000);
+      } else {
+        Swal.fire({icon:'error', title:'Error', text:'Could not duplicate'});
+      }
+    });
+  });
+
+  document.querySelectorAll('.btn-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-id');
+      const ok = await Swal.fire({icon:'warning', title:'Delete this template?', showCancelButton:true, confirmButtonText:'Delete', confirmButtonColor:'#ef4444'});
+      if (!ok.isConfirmed) return;
+      const r = await fetch(`/templates/${id}/delete`, { method:'POST' });
+      if (r.ok) {
+        Swal.fire({icon:'success', title:'Deleted', timer:900, showConfirmButton:false});
+        setTimeout(()=>location.reload(), 800);
+      } else {
+        Swal.fire({icon:'error', title:'Error', text:'Could not delete'});
+      }
+    });
+  });
+
+  document.getElementById('btnCreateTemplate')?.addEventListener('click', async () => {
+    const { value: name } = await Swal.fire({
+      title: 'New template name',
+      input: 'text',
+      inputPlaceholder: 'e.g. Order Confirmation',
+      showCancelButton: true,
+      confirmButtonColor: '#059669',
+            customClass: { popup: 'text-[1em]', confirmButton: 'text-[0.8em]' }
+    });
+    if (!name) return;
+
+    const fd = new FormData();
+    fd.append('template_name', name);
+    const res = await fetch('/templates/new', { method: 'POST', body: fd });
+    if (res.ok) {
+      Swal.fire({ icon: 'success', title: 'Created', timer: 900, showConfirmButton: false });
+      setTimeout(() => location.reload(), 800);
+    } else {
+      Swal.fire({ icon: 'error', title: 'Could not create template' });
+    }
+  });
+</script>
+
 {% endblock %}

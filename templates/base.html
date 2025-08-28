@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}ShopFlow{% endblock %}</title>
+  <title>{% block title %}Shopify Manager{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link
     rel="stylesheet"
@@ -38,12 +38,11 @@
       <div class="w-6 h-6 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-bold">
         <i class="fas fa-cube"></i>
       </div>
-      <span class="font-semibold text-gray-900 text-base select-none">ShopFlow</span>
+      <span class="font-semibold text-gray-900 text-base select-none">Shopify Manager</span>
     </div>
     <div class="flex items-center space-x-4 text-sm text-gray-500 select-none mt-2 sm:mt-0">
-      <span>Welcome back, Admin</span>
       <div
-        class="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center font-semibold text-sm"
+        class="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-semibold text-xs"
         aria-label="User Initial A"
       >A</div>
     </div>
@@ -71,7 +70,7 @@
     </a>
   </nav>
 
-  <main class="px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto">
+  <main class="px-8 sm:px-6 lg:px-8 py-6 max-w-8l mx-auto">
     {% block content %}{% endblock %}
   </main>
 </body>

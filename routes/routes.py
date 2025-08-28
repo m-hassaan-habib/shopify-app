@@ -672,30 +672,259 @@ def delete_all_orders():
         flash(f"Error deleting orders: {str(e)}", "danger")
     return redirect(url_for("routes.dashboard", status="total"))
 
+
 @routes.route('/templates')
 def list_templates():
+    page = max(int(request.args.get('page', 1)), 1)
+    per_page = 9
+    offset = (page - 1) * per_page
+
+    q = (request.args.get('q') or '').strip()
+    category = (request.args.get('category') or 'All').strip()
+    status = (request.args.get('status') or 'All').strip()
+
+    where = []
+    params = []
+
+    if q:
+        where.append("(template_name LIKE %s OR IFNULL(description,'') LIKE %s OR content LIKE %s)")
+        like = f"%{q}%"
+        params += [like, like, like]
+
+    if category and category != 'All':
+        where.append("COALESCE(category,'') = %s")
+        params.append(category)
+
+    if status and status != 'All':
+        where.append("COALESCE(status,'Active') = %s")
+        params.append(status)
+
+    where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+
     conn = get_connection()
     with conn.cursor() as c:
-        c.execute("SELECT * FROM message_templates")
-        tpl = c.fetchall()
-    return render_template('templates.html', templates=tpl)
+        c.execute(f"SELECT COUNT(*) AS total FROM message_templates{where_sql}", params)
+        total = c.fetchone()['total']
 
-@routes.route('/templates/<int:tpl_id>', methods=['GET','POST'])
+        c.execute(
+            f"""SELECT id, template_name, description, category, status, content,
+                        created_at, updated_at
+                 FROM message_templates
+                 {where_sql}
+                 ORDER BY updated_at DESC, id DESC
+                 LIMIT %s OFFSET %s""",
+            params + [per_page, offset]
+        )
+        rows = c.fetchall()
+
+        c.execute("SELECT COUNT(*) AS total FROM message_templates")
+        total_templates = c.fetchone()['total']
+        c.execute("SELECT COUNT(*) AS active FROM message_templates WHERE status='Active'")
+        active_templates = c.fetchone()['active']
+        c.execute("SELECT COUNT(*) AS drafts FROM message_templates WHERE status='Draft'")
+        draft_templates = c.fetchone()['drafts']
+        c.execute("SELECT COUNT(DISTINCT COALESCE(category,'Orders')) AS cats FROM message_templates")
+        categories_count = c.fetchone()['cats']
+
+    def _display_title(name: str, cat: str | None) -> str:
+        n = (name or '').lower()
+        if n.startswith('return_'):      return 'Failed\nDelivery\nFollow-up'
+        if n.startswith('tracking_'):    return 'Courier\nTracking Info'
+        if n.startswith('cancelled_'):   return 'Cancelled\nOrder\nFollow-up'
+        if n.startswith('valued_'):      return 'Valued\nCustomer\nPromotion'
+        return 'Order\nConfirmation'
+
+    enriched = []
+    for r in rows:
+        raw = r.get('content') or ''
+        preview_text, lines_count, chars_count = '', 0, 0
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                lines_count = len(parsed)
+                preview_text = (parsed[0] if parsed else '')[:120]
+                chars_count = sum(len(x) for x in parsed if isinstance(x, str))
+            else:
+                s = str(parsed)
+                lines_count = max(1, s.count('\n') + 1)
+                preview_text = s[:120]
+                chars_count = len(s)
+        except Exception:
+            s = str(raw)
+            lines_count = max(1, s.count('\n') + 1)
+            preview_text = s[:120]
+            chars_count = len(s)
+
+        r['display_title'] = _display_title(r.get('template_name'), r.get('category'))
+        r['preview_text']  = preview_text
+        r['lines_count']   = lines_count
+        r['chars_count']   = chars_count
+        enriched.append(r)
+
+    total_pages = (total + per_page - 1) // per_page
+
+    return render_template(
+        "templates.html",
+        templates=enriched,
+        q=q, category=category, status=status,
+        current_page=page, total_pages=total_pages, total=total,
+        total_templates=total_templates, active_templates=active_templates,
+        draft_templates=draft_templates, categories_count=categories_count
+    )
+
+
+def _preview_from_lines(lines: list[str]) -> str:
+    # Join lines and substitute common placeholders with sample values
+    sample = {
+        'name': 'Ahmed',
+        'order_id': 'ORD-1023',
+        'order_num': 'ORD-1023',
+        'product': 'Wireless Headphones',
+        'price': 'Rs. 2,950',
+        'tracking_link': 'https://track.example/XYZ',
+        'tracking': 'TRK123456',
+    }
+    text = "\n".join(lines)
+    for k, v in sample.items():
+        text = text.replace('{'+k+'}', v)
+    return text.strip()
+
+
+@routes.route('/templates/<int:tpl_id>/preview', methods=['POST'])
+def preview_template(tpl_id):
+    data = request.get_json(force=True, silent=True) or {}
+    lines = [s.strip() for s in (data.get('items') or []) if s and s.strip()]
+    if not lines:
+        # fallback: use DB content if form didn’t send anything
+        conn = get_connection()
+        with conn.cursor() as c:
+            c.execute("SELECT content FROM message_templates WHERE id=%s", (tpl_id,))
+            row = c.fetchone()
+        try:
+            lines = json.loads(row['content'] or '[]')
+            if not isinstance(lines, list):
+                lines = [str(lines)]
+        except Exception:
+            lines = [str(row['content'] or '')]
+
+    return jsonify({'preview': _preview_from_lines(lines)})
+
+
+@routes.route('/templates/<int:tpl_id>/json')
+def template_json(tpl_id):
+    conn = get_connection()
+    with conn.cursor() as c:
+        c.execute("""SELECT id, template_name, description, category, status, content,
+                            created_at, updated_at
+                     FROM message_templates WHERE id=%s""", (tpl_id,))
+        row = c.fetchone()
+    if not row:
+        return jsonify({"error":"Not found"}), 404
+    return jsonify(row)
+
+
+def _next_copy_name(conn, base_name, max_len=50):
+    """
+    Generate a unique, length-safe copy name:
+    <trimmed base> (Copy) / (Copy 2) / (Copy 3) ... within max_len chars.
+    """
+    base_name = (base_name or 'Untitled Template').strip()
+    n = 1
+    while True:
+        suffix = " (Copy)" if n == 1 else f" (Copy {n})"
+        limit = max_len - len(suffix)
+        if limit < 1:
+            candidate = suffix.strip()[:max_len]
+        else:
+            candidate = (base_name[:limit]).rstrip() + suffix
+        with conn.cursor() as c:
+            c.execute("SELECT 1 FROM message_templates WHERE template_name=%s LIMIT 1", (candidate,))
+            exists = c.fetchone()
+        if not exists:
+            return candidate
+        n += 1
+
+
+@routes.route('/templates/<int:tpl_id>/duplicate', methods=['POST'])
+def duplicate_template(tpl_id):
+    conn = get_connection()
+    with conn.cursor() as c:
+        c.execute("SELECT * FROM message_templates WHERE id=%s", (tpl_id,))
+        t = c.fetchone()
+        if not t:
+            return jsonify({"error": "Not found"}), 404
+
+        new_name = _next_copy_name(conn, t['template_name'], max_len=50)
+
+        c.execute("""
+          INSERT INTO message_templates
+            (template_name, description, category, status, content)
+          VALUES (%s, %s, %s, %s, %s)
+        """, (new_name, t.get('description'), t.get('category'), t.get('status'), t.get('content')))
+        conn.commit()
+
+    flash("Template duplicated", "success")
+    return redirect(url_for('routes.list_templates'))
+
+
+
+@routes.route('/templates/<int:tpl_id>/delete', methods=['POST'])
+def delete_template(tpl_id):
+    conn = get_connection()
+    with conn.cursor() as c:
+        c.execute("DELETE FROM message_templates WHERE id=%s", (tpl_id,))
+        conn.commit()
+    return jsonify({"ok": True})
+
+
+@routes.route('/templates/<int:tpl_id>', methods=['GET', 'POST'])
 def edit_template(tpl_id):
     conn = get_connection()
     if request.method == 'POST':
-        new_items = request.form.getlist('items')
-        new_content = json.dumps(new_items)
+        # fields from form
+        title = (request.form.get('template_name') or '').strip()
+        category = (request.form.get('category') or 'Orders').strip()
+        description = (request.form.get('description') or '').strip()
+        status = (request.form.get('status') or 'Active').strip()
+
+        # collect lines (ignore empty)
+        items = [s.strip() for s in request.form.getlist('items') if s.strip()]
+        content = json.dumps(items, ensure_ascii=False)
+
         with conn.cursor() as c:
-            c.execute("UPDATE message_templates SET content=%s WHERE id=%s", (new_content, tpl_id))
+            c.execute("""
+                UPDATE message_templates
+                   SET template_name=%s,
+                       description=%s,
+                       category=%s,
+                       status=%s,
+                       content=%s
+                 WHERE id=%s
+            """, (title, description, category, status, content, tpl_id))
             conn.commit()
+
         flash("Template updated", "success")
         return redirect(url_for('routes.list_templates'))
+
+    # GET
     with conn.cursor() as c:
         c.execute("SELECT * FROM message_templates WHERE id=%s", (tpl_id,))
         tpl = c.fetchone()
-        items = json.loads(tpl["content"])
+    items = []
+    try:
+        items = json.loads(tpl.get('content') or '[]')
+        if not isinstance(items, list):
+            items = [str(items)]
+    except Exception:
+        items = [str(tpl.get('content') or '')]
+
+    # sensible defaults if columns are missing
+    tpl.setdefault('category', 'Orders')
+    tpl.setdefault('status', 'Active')
+    tpl.setdefault('description', '')
+
     return render_template('edit_template.html', template=tpl, items=items)
+
 
 @routes.route('/templates/new', methods=['POST'])
 def create_template():
