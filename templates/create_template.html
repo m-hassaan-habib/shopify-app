@@ -1,26 +1,18 @@
 {% extends "base.html" %}
-{% block title %}Edit Template{% endblock %}
+{% block title %}Create Template{% endblock %}
 {% block content %}
 <div class="space-y-6">
   <!-- Header -->
-  <div>
+  <div class="flex justify-between items-center">
     <a href="{{ url_for('routes.list_templates') }}" 
-       class="px-3 py-1.5 border rounded text-gray-600 hover:bg-gray-100 inline-block mb-4">&larr; Back to Templates</a>
-    <div class="flex justify-between items-center">
-      <div>
-        <h1 class="text-xl font-semibold text-gray-900">Edit Template</h1>
-        <p class="text-sm text-gray-500">Modify your existing template</p>
-      </div>
-      <div class="flex gap-2">
-        <button type="button"
-                class="px-3 py-1.5 border rounded text-gray-600 hover:bg-gray-100">Preview</button>
-        <button type="submit" form="templateForm"
-                class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">Save Template</button>
-      </div>
+       class="px-3 py-1.5 border rounded text-gray-600 hover:bg-gray-100">&larr; Back to Templates</a>
+    <div class="flex gap-2">
+      <button class="px-3 py-1.5 border rounded text-gray-600 hover:bg-gray-100">Preview</button>
+      <button type="submit" form="templateForm"
+              class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">Save Template</button>
     </div>
   </div>
 
-  <!-- Form -->
   <form id="templateForm" method="POST" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Left side -->
     <div class="lg:col-span-2 space-y-6">
@@ -28,43 +20,34 @@
       <div class="border rounded-lg p-4 bg-white">
         <h2 class="font-semibold text-gray-900 mb-4">Template Information</h2>
         <div class="space-y-3">
-          <input type="text" name="template_name" value="{{ template.template_name }}"
+          <input type="text" name="template_name" placeholder="Template Name *"
                  class="w-full border rounded px-3 py-2 text-sm" required>
           <select name="category" class="w-full border rounded px-3 py-2 text-sm" required>
-            <option value="">Select category</option>
-            <option value="Orders" {% if template.category == 'Orders' %}selected{% endif %}>Orders</option>
-            <option value="Delivery" {% if template.category == 'Delivery' %}selected{% endif %}>Delivery</option>
-            <option value="Marketing" {% if template.category == 'Marketing' %}selected{% endif %}>Marketing</option>
-            <option value="Greetings" {% if template.category == 'Greetings' %}selected{% endif %}>Greetings</option>
+            <option>Select category</option>
+            <option>Orders</option>
+            <option>Delivery</option>
+            <option>Marketing</option>
+            <option>Greetings</option>
           </select>
-          <input type="text" name="description" value="{{ template.description or '' }}"
-                 placeholder="Description"
+          <input type="text" name="description" placeholder="Description"
                  class="w-full border rounded px-3 py-2 text-sm">
         </div>
       </div>
 
       <!-- Content -->
       <div class="border rounded-lg p-4 bg-white">
-        <div class="flex justify-between items-center mb-4">
-          <h2 class="font-semibold text-gray-900">Message Content</h2>
-          <span class="text-xs text-gray-500">{{ items|length }} lines</span>
-        </div>
+        <h2 class="font-semibold text-gray-900 mb-4">Message Content</h2>
         <div id="message-lines" class="space-y-2">
-          {% for line in items %}
-          <input type="text" name="items" value="{{ line }}" 
+          <input type="text" name="lines" placeholder="Enter message line 1..."
                  class="w-full border rounded px-3 py-2 text-sm">
-          {% endfor %}
         </div>
-        <button type="button" onclick="addLine()" 
-                class="mt-3 px-3 py-1.5 border rounded text-gray-700 hover:bg-gray-50 w-full">
-          + Add New Line
-        </button>
+        <button type="button" onclick="addLine()"
+                class="mt-3 px-3 py-1.5 border rounded text-gray-700 hover:bg-gray-50 w-full">+ Add New Line</button>
       </div>
     </div>
 
     <!-- Right side -->
     <div class="space-y-6">
-      <!-- Variables -->
       <div class="border rounded-lg p-4 bg-white">
         <h2 class="font-semibold text-gray-900 mb-3">Available Variables</h2>
         <ul class="space-y-1 text-sm text-gray-700">
@@ -77,22 +60,16 @@
         </ul>
       </div>
 
-      <!-- Preview -->
       <div class="border rounded-lg p-4 bg-white">
         <h2 class="font-semibold text-gray-900 mb-2">Live Preview</h2>
         <div id="live-preview" class="text-sm text-gray-700 bg-gray-50 border rounded p-2 h-32 overflow-y-auto">
-          {% for line in items %}
-          {{ line }}<br>
-          {% endfor %}
+          Start typing your message...
         </div>
-        <p class="text-xs text-gray-400 mt-1">Preview with sample data. Variables will be replaced with actual values when sent.</p>
       </div>
 
-      <!-- Status -->
       <div class="border rounded-lg p-4 bg-white">
         <h2 class="font-semibold text-gray-900 mb-2">Status</h2>
         <span class="text-green-600 font-medium">✔ Active Template</span>
-        <p class="text-xs text-gray-400">This template is active and can be used for messaging campaigns.</p>
       </div>
     </div>
   </form>
@@ -103,7 +80,7 @@ function addLine() {
   const container = document.getElementById("message-lines");
   const input = document.createElement("input");
   input.type = "text";
-  input.name = "items";
+  input.name = "lines";
   input.placeholder = `Enter message line ${container.children.length+1}...`;
   input.className = "w-full border rounded px-3 py-2 text-sm";
   container.appendChild(input);

@@ -1,327 +1,552 @@
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
+
 {% block content %}
+<main class="px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto">
 
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet"/>
-
-<div class="container-xl py-4">
-  <!-- Stats Cards -->
-  <section class="row g-3 text-center mb-4 text-white">
-    {% set stats = [
-        ('Total Orders', total_orders, 'fa-shopping-cart', 'bg-icon-cart', 'total'),
-        ('Confirmed', confirmed_orders, 'fa-check', 'bg-icon-confirmed', 'Confirmed'),
-        ('Cancelled', cancelled_orders, 'fa-times', 'bg-icon-cancelled', 'Cancelled'),
-        ('Pending', pending_orders, 'fa-clock', 'bg-icon-pending', 'Pending'),
-        ('Not Responding', not_responding_orders, 'fa-exclamation-triangle', 'bg-icon-notresponding', 'Not Responding'),
-        ('To Process', to_process_orders, 'fa-cube', 'bg-icon-toprocess', 'To Process'),
-        ('Failed Delivery', failed_delivery_orders, 'fa-undo', 'bg-icon-failed', 'Failed Delivery'),
-        ('Valued Customers', valued_orders, 'fa-star', 'bg-icon-valued', 'Valued')
-    ] %}
-    {% for label, value, icon, icon_class, filter in stats %}
-    <div class="col-6 col-md-2">
-      <a href="{{ url_for('routes.filtered_orders', status=filter) }}" class="text-decoration-none text-white">
-        <div class="bg-dark-custom p-3 rounded-3 d-flex flex-column align-items-center">
-          <div class="card-icon {{ icon_class }} mb-2"><i class="fas {{ icon }}"></i></div>
-          <div class="fs-2 fw-bold">{{ value }}</div>
-          <div class="small fw-semibold">{{ label }}</div>
-        </div>
-      </a>
+  <!-- Header + actions -->
+  <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4">
+    <div>
+      <h1 class="font-bold text-gray-900 text-lg leading-tight mb-1 select-none">Dashboard</h1>
+      <p class="text-xs text-gray-500 select-none">Monitor your orders and manage WhatsApp messaging</p>
     </div>
+    <div class="flex space-x-2 mt-3 sm:mt-0">
+      <button type="button" onclick="location.reload()" 
+        class="flex items-center space-x-1 text-xs text-white bg-emerald-500 hover:bg-emerald-600 rounded-md px-3 py-1 transition active:scale-95">
+        <i class="fas fa-sync-alt text-[12px]"></i>
+        <span>Refresh</span>
+      </button>
+    </div>
+
+  </div>
+
+  <!-- 8 stat cards in 2 rows (4 per row on lg+) -->
+  {% set stats = [
+      ('Total Orders', total_orders, 'fa-cube', 'bg-green-100 text-green-600', 'total'),
+      ('Confirmed', confirmed_orders, 'fa-check-circle', 'bg-green-100 text-green-600', 'Confirmed'),
+      ('Pending', pending_orders, 'fa-clock', 'bg-orange-100 text-orange-400', 'Pending'),
+      ('Cancelled', cancelled_orders, 'fa-times-circle', 'bg-red-100 text-red-500', 'Cancelled'),
+      ('Not Responding', not_responding_orders, 'fa-question-circle', 'bg-gray-100 text-gray-400', 'Not Responding'),
+      ('Failed Delivery', failed_delivery_orders, 'fa-exclamation-circle', 'bg-orange-100 text-orange-400', 'Failed Delivery'),
+      ('Valued Customers', valued_orders, 'fa-user-friends', 'bg-blue-100 text-blue-500', 'Valued'),
+      ('To Process', to_process_orders, 'fa-sync-alt', 'bg-green-100 text-green-600', 'To Process')
+  ] %}
+  <section aria-label="Order status summary" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    {% for label, value, icon, icon_class, filter in stats %}
+    <a href="{{ url_for('routes.filtered_orders', status=filter) }}" aria-hidden="true" title="{{ label }} Icon">
+      <div class="bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow duration-300" role="region" aria-labelledby="{{ label | lower | replace(' ', '-') }}">
+        <div>
+          <p class="text-xs text-gray-500 select-none">{{ label }}</p>
+          <p id="{{ label | lower | replace(' ', '-') }}" class="font-bold text-gray-900 text-xl select-text">{{ value }}</p>
+        </div>
+        <div class="{{ icon_class }} rounded-md p-2">
+          <i class="fas {{ icon }} fa-lg"></i>
+        </div>
+      </div>
+    </a>
     {% endfor %}
   </section>
 
-  <!-- Import Orders -->
-  <section class="bg-dark-custom p-4 mb-4 rounded-3 text-white">
-    <div class="d-flex align-items-center mb-3">
-      <h5 class="mb-0 fw-semibold">Import Orders</h5>
+  <!-- Charts + Side panel -->
+  <section class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+    <!-- Charts card -->
+    <div class="lg:col-span-2 bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow duration-300">
+      <!-- Top Products: BAR -->
+      <h2 class="font-semibold text-gray-900 text-sm mb-3 flex items-center space-x-1 select-none">
+        <i class="fas fa-chart-bar text-green-600"></i>
+        <span>Top Products</span>
+      </h2>
+      <div class="h-64">
+        <canvas id="chartTopProducts" class="w-full h-full"></canvas>
+      </div>
+
+      <!-- Orders Over Time: LINE -->
+      <h2 class="font-semibold text-gray-900 text-sm mb-3 flex items-center space-x-1 select-none mt-8">
+        <i class="fas fa-chart-line text-blue-600"></i>
+        <span>Orders Over Time</span>
+      </h2>
+      <div class="h-64">
+        <canvas id="chartOrdersOverTime" class="w-full h-full"></canvas>
+      </div>
     </div>
-    <form id="csvForm" enctype="multipart/form-data">
-      <div class="mb-2">
-        <input class="form-control bg-dark-input border-secondary text-white" type="file" name="file" id="csvFile" required>
+
+    <!-- Right side: CSV + Quick actions -->
+    <aside class="space-y-6">
+      <div class="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow duration-300">
+        <h2 class="font-semibold text-gray-900 text-sm mb-3 flex items-center space-x-1 select-none">
+          <i class="fas fa-file-import text-green-600"></i>
+          <span>CSV Import</span>
+        </h2>
+      <form id="csvForm" enctype="multipart/form-data">
+        <label for="csvFile"
+              class="border border-gray-300 border-dashed rounded-md p-4 mb-3 text-center text-gray-500 text-xs cursor-pointer select-none hover:bg-gray-50 transition block">
+          <i class="fas fa-upload fa-lg mb-1"></i>
+          <div id="csvLabelText">Drop CSV file here or click to upload</div>
+        </label>
+        <input class="hidden" type="file" name="file" id="csvFile" required>
+        
+        <div id="selectedFile" class="text-xs text-gray-600 text-center mb-2 hidden"></div>
+        
+        <button type="submit"
+                class="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-md py-2 transition active:scale-95">
+          Upload Orders
+        </button>
+      </form>
+
       </div>
-      <div class="d-flex justify-content-end">
-        <button class="btn btn-outline-light btn-sm" type="submit">Import CSV</button>
+
+      <div class="bg-white border border-gray-200 rounded-lg p-4 text-xs shadow-sm hover:shadow-md transition-shadow duration-300">
+        <h3 class="font-semibold text-gray-900 mb-2 select-none flex items-center space-x-1">
+          <i class="fas fa-bolt text-gray-700"></i>
+          <span>Quick Actions</span>
+        </h3>
+
+      <form id="send-whatsapp-form" method="post" action="/send_whatsapp_messages" class="space-y-3">
+        <div class="mb-3">
+          <p class="font-semibold text-gray-700 mb-1 select-none">Message Types to Send</p>
+          <div class="space-y-1 text-gray-700">
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="radio" name="msgType" value="confirmation" class="form-radio text-green-500" checked>
+              <span>Confirmation</span>
+            </label>
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="radio" name="msgType" value="cancelled" class="form-radio text-green-500">
+              <span>Cancelled Order Follow-up</span>
+            </label>
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="radio" name="msgType" value="return" class="form-radio">
+              <span>Return / Failed Delivery</span>
+            </label>
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="radio" name="msgType" value="valued" class="form-radio">
+              <span>Valued Customer Promo</span>
+            </label>
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="radio" name="msgType" value="tracking" class="form-radio">
+              <span>Courier Tracking</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between mt-3 text-gray-500 text-[10px] select-none">
+          <div>
+            <span class="font-semibold">Auto Mode</span>
+            <div>Send messages in the Background</div>
+          </div>
+          <div class="relative inline-block w-11 h-5">
+            <input type="checkbox" name="headless" id="headless"
+              class="peer appearance-none w-11 h-5 bg-slate-200 rounded-full checked:bg-emerald-500 cursor-pointer transition-colors duration-300" />
+            <label for="headless"
+              class="absolute top-0 left-0 w-5 h-5 bg-white rounded-full border border-slate-300 shadow-sm transition-transform duration-300 peer-checked:translate-x-6 peer-checked:border-emerald-600 cursor-pointer"></label>
+          </div>
+        </div>
+
+        <button type="submit"
+          class="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-md py-2 flex items-center mb-2 justify-center space-x-2 transition active:scale-95">
+          <i class="fas fa-paper-plane"></i>
+          <span>Send WhatsApp Messages</span>
+        </button>
+      </form>
+
+
+        <form method="post" action="/orders/confirm_all" onsubmit="return confirm('Confirm all orders?');">
+          <button type="submit" id="confirm-btn" class="w-full border border-gray-300 rounded-md py-2 text-gray-700 text-xs mt-2 mb-2 hover:bg-gray-50 flex items-center justify-center space-x-2 transition active:scale-95">
+            <i class="far fa-check-circle"></i>
+            <span>Confirm All Orders</span>
+          </button>
+        </form>
+        <form method="post" action="/orders/delete_all" onsubmit="return confirm('Delete all orders permanently?');">
+          <button type="submit" id="delete-btn" class="w-full border border-red-300 rounded-md py-2 text-red-600 text-xs hover:bg-red-50 flex items-center justify-center space-x-2 transition active:scale-95">
+            <i class="fas fa-trash-alt"></i>
+            <span>Delete All Orders</span>
+          </button>
+        </form>
       </div>
-    </form>
-    <p class="text-secondary small mb-0">Choose your CSV file</p>
+    </aside>
   </section>
 
-  <!-- Charts -->
-  <section class="row g-4 mb-4 text-white">
-    <div class="col-12 col-md-6">
-      <div class="bg-dark-custom p-4 rounded-3">
-        <h6 class="fw-semibold mb-3">Top Products</h6>
-        <canvas id="topProductsChart" style="max-height: 220px;"></canvas>
-      </div>
+  <!-- Recent Orders -->
+  <section class="bg-white border border-gray-200 rounded-lg p-4">
+    <h2 class="font-semibold text-gray-900 text-sm mb-4 flex items-center space-x-1 select-none">
+      <i class="fas fa-cubes text-green-600"></i>
+      <span>Recent Orders</span>
+    </h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs text-gray-600 border-collapse">
+        <thead>
+          <tr class="border-b border-gray-200">
+            <th class="py-2 px-3 font-semibold select-none">Order ID</th>
+            <th class="py-2 px-3 font-semibold select-none">Customer</th>
+            <th class="py-2 px-3 font-semibold select-none">Amount</th>
+            <th class="py-2 px-3 font-semibold select-none">Date</th>
+            <th class="py-2 px-3 font-semibold select-none">Status</th>
+            <th class="py-2 px-3 font-semibold select-none">Shipping Status</th>
+            <th class="py-2 px-3 font-semibold select-none">Courier</th>
+            <th class="py-2 px-3 font-semibold select-none">Tracking</th>
+            <th class="py-2 px-3 font-semibold select-none">Customer Type</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for order in orders %}
+          <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-default">
+            <td class="py-2 px-3 font-mono text-gray-800 select-text">{{ order.order_number }}</td>
+            <td class="py-2 px-3 select-text">{{ order.billing_name }}</td>
+            <td class="py-2 px-3 font-semibold select-text">PKR {{ order.total }}</td>
+            <td class="py-2 px-3 select-text text-gray-500">
+              {{ order.created_at.strftime('%Y-%m-%d') if order.created_at else '' }}
+            </td>
+            <td class="py-2 px-3">
+              <span class="inline-block text-[10px] font-semibold rounded-full px-2 py-0.5 select-none
+                {% if order.status == 'Confirmed' %}bg-emerald-600 text-white
+                {% elif order.status == 'Pending' %}bg-gray-300 text-gray-700
+                {% elif order.status == 'Cancelled' %}bg-red-600 text-white
+                {% else %}bg-gray-300 text-gray-700{% endif %}">
+                {{ order.status }}
+              </span>
+            </td>
+            <td class="py-2 px-3 select-text">{{ order.shipping_status }}</td>
+            <td class="py-2 px-3 select-text">{{ order.courier or order.preferred_courier }}</td>
+            <td class="py-2 px-3 select-text">{{ order.tracking_number }}</td>
+            <td class="py-2 px-3 select-text">{{ order.customer_type }}</td>
+          </tr>
+          {% else %}
+          <tr><td class="py-2 px-3" colspan="9">No orders found</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-    <div class="col-12 col-md-6">
-      <div class="bg-dark-custom p-4 rounded-3">
-        <h6 class="fw-semibold mb-3">Orders by City</h6>
-        <canvas id="ordersCityChart" style="max-height: 220px;"></canvas>
+    <div class="flex justify-between items-center mt-4 text-[10px] text-gray-500 select-none flex-wrap gap-2">
+      <span>Showing page <strong>{{ current_page }}</strong> of <strong>{{ total_pages }}</strong></span>
+      <div class="space-x-2 flex flex-wrap gap-2">
+        <a class="border border-gray-300 rounded-md px-3 py-1 hover:bg-gray-50 text-gray-700 transition active:scale-95 {% if current_page == 1 %}opacity-50 pointer-events-none{% endif %}" href="?page={{ current_page - 1 }}">Previous</a>
+        <a class="border border-gray-300 rounded-md px-3 py-1 hover:bg-gray-50 text-gray-700 transition active:scale-95 {% if current_page == total_pages %}opacity-50 pointer-events-none{% endif %}" href="?page={{ current_page + 1 }}">Next</a>
       </div>
     </div>
   </section>
-
-  <!-- Actions -->
-<section class="row g-4 text-white">
-<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-  <form id="send-whatsapp-form" method="post" action="/send_whatsapp" class="d-flex align-items-center gap-2 flex-wrap">
-    <div class="form-check form-switch mb-0">
-      <input type="checkbox" name="headless" id="headless" class="form-check-input" checked>
-      <label for="headless" class="form-check-label text-white">Use Same WhatsApp</label>
-    </div>
-    <button type="submit" id="send-whatsapp-btn" class="btn btn-outline-light btn-sm">
-      <i class="fab fa-whatsapp me-1"></i> Send Confirmation Messages
-    </button>
-  </form>
-
-  <form id="send-return-form" method="post" action="/send_return_whatsapp" class="d-flex align-items-center gap-2 flex-wrap">
-    <div class="form-check form-switch mb-0">
-      <input type="checkbox" name="headless" id="headless-return" class="form-check-input" checked>
-      <label for="headless-return" class="form-check-label text-white">Use Same WhatsApp</label>
-    </div>
-    <button type="submit" class="btn btn-outline-light btn-sm">
-      <i class="fab fa-whatsapp me-1"></i> Send Return Messages
-    </button>
-  </form>
-
-  <form id="send-cancelled-form" method="post" action="/send_cancelled_whatsapp" class="d-flex align-items-center gap-2 flex-wrap">
-    <div class="form-check form-switch mb-0">
-      <input type="checkbox" name="headless" id="headless-cancelled" class="form-check-input" checked>
-      <label for="headless-cancelled" class="form-check-label text-white">Use Same WhatsApp</label>
-    </div>
-    <button type="submit" class="btn btn-outline-light btn-sm">
-      <i class="fab fa-whatsapp me-1"></i> Send Cancelled Messages
-    </button>
-  </form>
-
-  <form id="send-valued-form" method="post" action="/send_valued_whatsapp" class="d-flex align-items-center gap-2 flex-wrap">
-    <div class="form-check form-switch mb-0">
-      <input type="checkbox" name="headless" id="headless-valued" class="form-check-input" checked>
-      <label for="headless-valued" class="form-check-label text-white">Use Same WhatsApp</label>
-    </div>
-    <button type="submit" class="btn btn-outline-light btn-sm">
-      <i class="fab fa-whatsapp me-1"></i> Send Valued Messages
-    </button>
-  </form>
-
-  <form id="send-tracking-form" method="post" action="/send_tracking_whatsapp" class="d-flex align-items-center gap-2 flex-wrap">
-    <div class="form-check form-switch mb-0">
-      <input type="checkbox" name="headless" id="headless-tracking" class="form-check-input" checked>
-      <label for="headless-tracking" class="form-check-label text-white">Use Same WhatsApp</label>
-    </div>
-    <button type="submit" class="btn btn-outline-light btn-sm">
-      <i class="fab fa-whatsapp me-1"></i> Send Tracking Messages
-    </button>
-  </form>
-
-  <div class="d-flex flex-wrap gap-2">
-    <form method="post" action="/orders/confirm_all" onsubmit="return confirm('Confirm all orders?');">
-      <button type="submit" id="confirm-btn" class="btn btn-outline-light btn-sm">Confirm Orders</button>
-    </form>
-    <form method="post" action="/orders/delete_all" onsubmit="return confirm('Delete all orders permanently?');">
-      <button type="submit" id="delete-btn" class="btn btn-outline-light btn-sm">Delete All Orders</button>
-    </form>
-  </div>
+  <!-- Fullscreen Loader -->
+<div id="loaderOverlay"
+     class="fixed inset-0 bg-white bg-opacity-90 z-50 hidden flex flex-col items-center justify-center">
+  <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-emerald-500 border-solid"></div>
+  <p class="mt-4 text-gray-700 font-medium text-sm">Sending messages, please wait...</p>
 </div>
 
-    <table class="table mb-0">
-      <thead>
-        <tr>
-          <th scope="col">Order #</th>
-          <th scope="col">Customer</th>
-          <th scope="col">Amount</th>
-          <th scope="col">Date</th>
-          <th scope="col">Status</th>
-          <th scope="col">Shipping Status</th>
-          <th scope="col">Courier</th>
-          <th scope="col">Tracking</th>
-          <th scope="col">Customer Type</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for order in orders %}
-        <tr>
-          <td>{{ order.order_number }}</td>
-          <td>{{ order.billing_name }}</td>
-          <td>PKR {{ order.total }}</td>
-          <td>{{ order.created_at.strftime('%Y-%m-%d') }}</td>
-          <td>{{ order.status }}</td>
-          <td>{{ order.shipping_status }}</td>
-          <td>{{ order.courier or order.preferred_courier }}</td>
-          <td>{{ order.tracking_number }}</td>
-          <td>{{ order.customer_type }}</td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="9">No orders found</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+</main>
 
-    <div class="pagination-controls">
-      <div>
-        Showing page <strong>{{ current_page }}</strong> of <strong>{{ total_pages }}</strong>
-      </div>
-      <div class="d-flex gap-2">
-        <a class="btn-pagination {% if current_page == 1 %}disabled{% endif %}" href="?page={{ current_page - 1 }}">Previous</a>
-        <a class="btn-pagination {% if current_page == total_pages %}disabled{% endif %}" href="?page={{ current_page + 1 }}">Next</a>
-      </div>
-    </div>
-  </div>
-</section>
+<!-- Load Chart.js + datalabels plugin -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
-new Chart(document.getElementById('topProductsChart'), {
-    type: 'line',
+  window.addEventListener('load', function () {
+    const TOP_LABELS = {{ top_products_labels | tojson }};
+    const TOP_VALUES = {{ top_products_counts | tojson }};
+    const OOT_LABELS = {{ orders_over_time_labels | tojson }};
+    const OOT_VALUES = {{ orders_over_time_counts | tojson }};
+
+    console.debug('TopProducts:', TOP_LABELS, TOP_VALUES);
+    console.debug('OrdersOverTime:', OOT_LABELS, OOT_VALUES);
+
+    function truncateLabel(lbl, n = 22) {
+      if (typeof lbl !== 'string') return lbl;
+      return lbl.length > n ? lbl.slice(0, n) + '…' : lbl;
+    }
+
+(function () {
+  const canvas = document.getElementById('chartTopProducts');
+  if (!canvas || !window.Chart) return;
+
+  const ctx = canvas.getContext('2d');
+
+  const gradient1 = ctx.createLinearGradient(0, 0, 0, 400);
+  gradient1.addColorStop(0, "#34d399");
+  gradient1.addColorStop(1, "#059669");
+
+  const gradient2 = ctx.createLinearGradient(0, 0, 0, 400);
+  gradient2.addColorStop(0, "#6ee7b7");
+  gradient2.addColorStop(1, "#047857");
+
+  const bgColors = TOP_VALUES.map((_, i) => (i % 2 === 0 ? gradient1 : gradient2));
+
+  new Chart(ctx, {
+    type: 'bar',
     data: {
-        labels: {{ top_products_labels | tojson }},
-        datasets: [
-            {
-                label: 'Category A',
-                data: {{ top_products_counts | tojson }},
-                backgroundColor: 'rgba(59, 130, 246, 0.3)',
-                borderColor: '#3b82f6',
-                fill: true,
-                tension: 0.4,
-                stack: 'stack1'
-            },
-            {
-                label: 'Category B',
-                data: {{ top_products_counts | tojson }},
-                backgroundColor: 'rgba(14, 165, 233, 0.3)',
-                borderColor: '#0ea5e9',
-                fill: true,
-                tension: 0.4,
-                stack: 'stack1'
-            }
-        ]
+      labels: TOP_LABELS,
+      datasets: [{
+        data: TOP_VALUES,
+        backgroundColor: bgColors,
+        borderWidth: 0,
+          borderRadius: {
+            topLeft: 10,
+            topRight: 10,
+            bottomLeft: 0,
+            bottomRight: 0
+          },
+        borderSkipped: false
+      }]
     },
     options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: 'top',
-                labels: { color: '#ccc' }
-            },
-            tooltip: {
-                mode: 'index',
-                intersect: false
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#111827",
+          titleColor: "#fff",
+          bodyColor: "#d1d5db",
+          padding: 8,
+          cornerRadius: 6,
+          displayColors: false
+        },
+        datalabels: {
+          color: "#fff",
+          anchor: "end",
+          align: "start",
+          font: { weight: "bold" },
+          formatter: function(value) {
+            if (value >= 1000) return (value/1000).toFixed(1) + "K";
+            return value;
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: "#374151",
+            font: { size: 11, weight: "500" },
+            callback: function(val, index) {
+              let lbl = this.getLabelForValue(val);
+              return lbl.length > 12 ? lbl.slice(0, 12) + "…" : lbl;
             }
+          },
+          grid: { display: false }
         },
-        interaction: {
-            mode: 'index',
-            intersect: false
+        y: {
+          beginAtZero: true,
+          ticks: { color: "#6b7280" },
+          grid: { color: "#fff" }
+        }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
+})();
+
+
+    // ---- Orders Over Time (LINE with gradient) ----
+    (function () {
+      const canvas = document.getElementById('chartOrdersOverTime');
+      if (!canvas || !window.Chart) return;
+
+      const ctx = canvas.getContext('2d');
+
+      const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+      gradient.addColorStop(0, "rgba(37,193,139,0.65)");
+      gradient.addColorStop(1, "rgba(37,193,139,0.35)");
+
+
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: OOT_LABELS,
+          datasets: [{
+            label: "Orders Over Time",
+            data: OOT_VALUES,
+            borderColor: "#059669",
+            backgroundColor: gradient,
+            borderWidth: 3,
+            fill: true,
+            tension: 0.4,
+            pointRadius: 5,
+            pointBackgroundColor: "#059669",
+            pointBorderColor: "#fff",
+            pointHoverRadius: 7,
+            pointHoverBackgroundColor: "#1d4ed8",
+            pointHoverBorderWidth: 2
+          }]
         },
-        scales: {
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: "#111827",
+              titleColor: "#fff",
+              bodyColor: "#d1d5db",
+              padding: 10,
+              cornerRadius: 6,
+              displayColors: false
+            }
+          },
+          scales: {
             x: {
-                stacked: true,
-                ticks: {
-                    color: '#ccc',
-                    callback: function(_, idx) {
-                        const label = this.chart.data.labels[idx];
-                        return label.length > 12 ? label.slice(0, 12) + '…' : label;
-                    }
-                }
+              ticks: { color: "#6b7280", font: { size: 12, weight: "500" } },
+              grid: { display: false }
             },
             y: {
-                stacked: true,
-                beginAtZero: true,
-                ticks: { color: '#ccc' }
+              beginAtZero: true,
+              ticks: { color: "#6b7280", font: { size: 12 } },
+              grid: { color: "#fff" }
             }
+          }
         }
-    }
-});
+      });
+    })();
 
-new Chart(document.getElementById("ordersCityChart"), {
-    type: 'pie',
-    data: {
-        labels: {{ city_labels | safe }},
-        datasets: [{
-            label: "Orders by City",
-            data: {{ city_counts | safe }},
-            backgroundColor: ["#ff9f43", "#28c76f", "#00cfe8", "#7367f0", "#ea5455"],
-            borderWidth: 1,
-            borderColor: '#1e1e1e'
-        }]
-    },
-    options: {
-        responsive: true,
-        plugins: {
-            legend: {
-                position: 'right',
-                labels: {
-                    boxWidth: 15,
-                    padding: 10,
-                    color: '#ffffff'
-                }
-            }
-        }
-    }
-});
+    // CSV submit
+    document.getElementById('csvForm')?.addEventListener('submit', function (e) {
+      e.preventDefault();
+      const formData = new FormData(this);
+      fetch('/import', { method: 'POST', body: formData })
+        .then(r => r.ok ? location.reload() : alert('Import failed'))
+        .catch(() => alert('Import failed'));
+    });
 
-$('#csvForm').submit(function(e) {
+    // WhatsApp
+    // document.getElementById('send-whatsapp-btn')?.addEventListener('click', () => {
+    //   const selected = document.querySelector('#message-type-form input[name="msgType"]:checked')?.value || 'confirmation';
+    //   const headless = document.getElementById('headless')?.checked;
+    //   const body = new URLSearchParams({
+    //     msgType: selected,
+    //     headless: headless ? '1' : '0'
+    //   });
+
+
+    //   const btn = document.getElementById('send-whatsapp-btn');
+    //   const label = btn.innerText;
+    //   btn.disabled = true; btn.innerText = 'Sending...';
+
+    //   fetch('/send_whatsapp_messages', { 
+    //     method: 'POST', 
+    //     headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, 
+    //     body 
+    //   })
+    //     .then(r => r.json())
+    //     .then(json => {
+    //       Swal.fire({
+    //         icon: json.failed_numbers?.length ? 'warning' : 'success',
+    //         title: json.message || 'Done',
+    //         text: json.failed_numbers?.length ? `Failed: ${json.failed_numbers.join(", ")}` : '',
+    //         confirmButtonColor: '#059669'
+    //       });
+    //     })
+
+    //     .finally(() => { btn.disabled = false; btn.innerText = label; });
+
+
+    // Headless toggle
+    (function () {
+      const t = document.getElementById('headless-toggle');
+      if (!t) return;
+      t.addEventListener('click', () => {
+        const pressed = t.getAttribute('aria-pressed') === 'true';
+        t.setAttribute('aria-pressed', String(!pressed));
+      });
+      t.addEventListener('keydown', (e) => {
+        if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); t.click(); }
+      });
+    })();
+  });
+
+// function handleWhatsappForm(formId, action) {
+//   $(formId).submit(function(e) {
+//     e.preventDefault();
+
+//     // Show loader
+//     $('#loaderOverlay').removeClass('hidden');
+
+//     const $btn = $(this).find('button').prop('disabled', true).text('Sending...');
+//     const payload = $(this).serialize();
+//     const btn2 = document.getElementById('confirm-btn');
+//     const btn3 = document.getElementById('delete-btn');
+//     btn2.disabled = true;
+//     btn3.disabled = true;
+
+//     $.post(action, payload)
+//       .done(function(res) {
+//         alert(res.message);
+//       })
+//       .fail(function() {
+//         alert('Failed to send messages.');
+//       })
+//       .always(function() {
+//         // Hide loader
+//         $('#loaderOverlay').addClass('hidden');
+
+//         $btn.prop('disabled', false).text('Send WhatsApp Messages');
+//         btn2.disabled = false;
+//         btn3.disabled = false;
+//       });
+//   });
+// }
+
+
+// handleWhatsappForm('#send-whatsapp-form', '/send_whatsapp_messages');
+
+  document.getElementById('send-whatsapp-form')?.addEventListener('submit', function (e) {
     e.preventDefault();
-    let formData = new FormData(this);
-    $.ajax({
-        url: '/import',
-        type: 'POST',
-        data: formData,
-        processData: false,
-        contentType: false,
-        success: () => {
-            alert('CSV Imported');
-            location.reload();
-        },
-        error: () => alert('Import failed')
-    });
-});
 
-function handleWhatsappForm(formId, action) {
-    $(formId).submit(function(e) {
-        e.preventDefault();
-        const $btn = $(this).find('button').prop('disabled', true).text('Sending...');
-        const payload = $(this).serialize();
-        const btn2 = document.getElementById('confirm-btn');
-        const btn3 = document.getElementById('delete-btn');
-        btn2.disabled = true;
-        btn3.disabled = true;
-        $.post(action, payload)
-            .done(function(res) {
-                alert(res.message);
-            })
-            .fail(function() {
-                alert('Failed to send messages.');
-            })
-            .always(function() {
-                $btn.prop('disabled', false).text('Send Messages');
-                btn2.disabled = false;
-                btn3.disabled = false;
-            });
-    });
-}
+    // Show loader
+    document.getElementById('loaderOverlay').classList.remove('hidden');
 
-handleWhatsappForm('#send-whatsapp-form', '/send_whatsapp');
-handleWhatsappForm('#send-return-form', '/send_return_whatsapp');
-handleWhatsappForm('#send-cancelled-form', '/send_cancelled_whatsapp');
-handleWhatsappForm('#send-valued-form', '/send_valued_whatsapp');
-handleWhatsappForm('#send-tracking-form', '/send_tracking_whatsapp');
+    const form = this;
+    const formData = new FormData(form);
+
+    // disable buttons
+    const btn = form.querySelector('button[type="submit"]');
+    const btn2 = document.getElementById('confirm-btn');
+    const btn3 = document.getElementById('delete-btn');
+    btn.disabled = true;
+    btn2.disabled = true;
+    btn3.disabled = true;
+
+    fetch(form.action, {
+      method: 'POST',
+      body: new URLSearchParams([...formData])
+    })
+    .then(r => r.json())
+    .then(json => {
+      Swal.fire({
+        icon: json.failed_numbers?.length ? 'warning' : 'success',
+        title: json.message || 'Done',
+        text: json.failed_numbers?.length ? `Failed: ${json.failed_numbers.join(", ")}` : '',
+        confirmButtonColor: '#059669',
+        customClass: {
+          popup: 'custom-popup',
+          title: 'custom-title',
+          confirmButton: 'custom-confirm'
+        }
+      });
+    })
+    .catch(() => {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to send messages.'
+      });
+    })
+    .finally(() => {
+      // Hide loader
+      document.getElementById('loaderOverlay').classList.add('hidden');
+
+      // reset buttons
+      btn.disabled = false;
+      btn2.disabled = false;
+      btn3.disabled = false;
+    });
+  });
+
+
+  document.getElementById('csvFile').addEventListener('change', function () {
+    const fileInfo = document.getElementById('selectedFile');
+    if (this.files.length > 0) {
+      fileInfo.textContent = `📄 ${this.files[0].name}`;
+      fileInfo.classList.remove('hidden');
+    } else {
+      fileInfo.textContent = '';
+      fileInfo.classList.add('hidden');
+    }
+  });
 </script>
-{% endblock %}
 
-<style>
-.bg-dark-custom {
-    margin-bottom: 1rem;
-}
-.row > [class^="col-"] {
-    padding-bottom: 1rem; 
-}
-</style>
+{% endblock %}

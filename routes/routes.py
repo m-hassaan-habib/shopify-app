@@ -96,26 +96,54 @@ def parse_date(val):
 
 @routes.route('/orders/status/<status>')
 def filtered_orders(status):
+    page = int(request.args.get('page', 1))
+    per_page = 10
+    offset = (page - 1) * per_page
+
     conn = get_connection()
     with conn.cursor() as cursor:
         if status == 'total':
-            cursor.execute("SELECT * FROM orders ORDER BY id DESC")
+            cursor.execute("SELECT COUNT(*) AS cnt FROM orders")
+            total_orders = cursor.fetchone()['cnt']
+            cursor.execute("SELECT * FROM orders ORDER BY id DESC LIMIT %s OFFSET %s", (per_page, offset))
         elif status == 'Valued':
-            cursor.execute("SELECT * FROM orders WHERE customer_type = %s ORDER BY id DESC", (status,))
+            cursor.execute("SELECT COUNT(*) AS cnt FROM orders WHERE customer_type = %s", (status,))
+            total_orders = cursor.fetchone()['cnt']
+            cursor.execute("SELECT * FROM orders WHERE customer_type = %s ORDER BY id DESC LIMIT %s OFFSET %s",
+                           (status, per_page, offset))
         else:
-            cursor.execute("SELECT * FROM orders WHERE status = %s OR shipping_status = %s ORDER BY id DESC", (status, status))
+            cursor.execute("SELECT COUNT(*) AS cnt FROM orders WHERE status = %s OR shipping_status = %s", (status, status))
+            total_orders = cursor.fetchone()['cnt']
+            cursor.execute("SELECT * FROM orders WHERE status = %s OR shipping_status = %s ORDER BY id DESC LIMIT %s OFFSET %s",
+                           (status, status, per_page, offset))
+
         orders = cursor.fetchall()
-    return render_template("orders.html", orders=orders, current_filter=status)
+
+    total_pages = (total_orders + per_page - 1) // per_page
+
+    return render_template(
+        "orders.html",
+        orders=orders,
+        current_filter=status,
+        current_page=page,
+        total_pages=total_pages,
+        total_orders=total_orders
+    )
+
 
 @routes.route('/')
 def dashboard():
     page = int(request.args.get('page', 1))
     per_page = 10
     offset = (page - 1) * per_page
+
     conn = get_connection()
     with conn.cursor() as cursor:
+        # recent orders (paginated)
         cursor.execute("SELECT * FROM orders ORDER BY id DESC LIMIT %s OFFSET %s", (per_page, offset))
         orders = cursor.fetchall()
+
+        # counts
         cursor.execute("SELECT COUNT(*) AS total FROM orders")
         total_orders = cursor.fetchone()['total']
         cursor.execute("SELECT COUNT(*) AS confirmed FROM orders WHERE status = 'Confirmed'")
@@ -132,16 +160,36 @@ def dashboard():
         failed_delivery_orders = cursor.fetchone()['failed_delivery']
         cursor.execute("SELECT COUNT(*) AS valued FROM orders WHERE customer_type = 'Valued'")
         valued_orders = cursor.fetchone()['valued']
-        cursor.execute("SELECT item_name, COUNT(*) as count FROM orders GROUP BY item_name ORDER BY count DESC LIMIT 5")
-        top_products = cursor.fetchall()
-        top_products_labels = [r['item_name'] for r in top_products]
-        top_products_counts = [r['count'] for r in top_products]
-        cursor.execute("SELECT billing_city, COUNT(*) as count FROM orders GROUP BY billing_city ORDER BY count DESC LIMIT 5")
-        cities = cursor.fetchall()
-        city_labels = [r['billing_city'] for r in cities]
-        city_counts = [r['count'] for r in cities]
+
+        # Top products (by count, top 5)
+        cursor.execute("""
+            SELECT item_name, COUNT(*) AS cnt
+            FROM orders
+            WHERE item_name <> '' AND item_name IS NOT NULL
+            GROUP BY item_name
+            ORDER BY cnt DESC
+            LIMIT 5
+        """)
+        tp = cursor.fetchall()
+        top_products_labels = [r['item_name'] for r in tp]
+        top_products_counts = [r['cnt'] for r in tp]
+
+        # Orders over time (group by month YYYY-MM). Works for DATETIME column.
+        cursor.execute("""
+            SELECT DATE_FORMAT(created_at, '%Y-%m') AS ym, COUNT(*) AS cnt
+            FROM orders
+            WHERE created_at IS NOT NULL
+            GROUP BY ym
+            ORDER BY ym ASC
+        """)
+        oot = cursor.fetchall()
+        orders_over_time_labels = [r['ym'] for r in oot if r['ym']]
+        orders_over_time_counts = [r['cnt'] for r in oot if r['ym']]
+
         total_pages = (total_orders + per_page - 1) // per_page
-    return render_template("dashboard.html",
+
+    return render_template(
+        "dashboard.html",
         total_orders=total_orders,
         confirmed_orders=confirmed_orders,
         cancelled_orders=cancelled_orders,
@@ -152,16 +200,41 @@ def dashboard():
         valued_orders=valued_orders,
         top_products_labels=top_products_labels,
         top_products_counts=top_products_counts,
-        city_labels=city_labels,
-        city_counts=city_counts,
+        orders_over_time_labels=orders_over_time_labels,
+        orders_over_time_counts=orders_over_time_counts,
         orders=orders,
         current_page=page,
         total_pages=total_pages
     )
 
+
+
 @routes.route('/orders')
 def orders():
-    return render_template("orders.html")
+    page = int(request.args.get('page', 1))
+    per_page = 10
+    offset = (page - 1) * per_page
+
+    conn = get_connection()
+    with conn.cursor() as cursor:
+        # Fetch paginated orders
+        cursor.execute("SELECT * FROM orders ORDER BY id DESC LIMIT %s OFFSET %s", (per_page, offset))
+        orders = cursor.fetchall()
+
+        # Count totals
+        cursor.execute("SELECT COUNT(*) AS total FROM orders")
+        total_orders = cursor.fetchone()['total']
+
+    total_pages = (total_orders + per_page - 1) // per_page
+
+    return render_template(
+        "orders.html",
+        orders=orders,
+        total_orders=total_orders,
+        current_page=page,
+        total_pages=total_pages
+    )
+
 
 @routes.route('/order/<int:order_id>', methods=['GET'])
 def get_order(order_id):
@@ -466,25 +539,50 @@ def send_whatsapp_generic(message_type, where_clause, update_after_send=None):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@routes.route('/send_whatsapp', methods=['POST'])
-def send_whatsapp():
-    return send_whatsapp_generic('confirmation', "WHERE status IN ('To Process', 'Not Responding')", "UPDATE orders SET status='Confirmed' WHERE order_number=%s")
+@routes.route('/send_whatsapp_messages', methods=['POST'])
+def send_whatsapp_messages():
+    msg_type = request.form.get('msgType')
+    if msg_type == 'confirmation':
+        return send_whatsapp_generic('confirmation', "WHERE status IN ('To Process', 'Not Responding')", "UPDATE orders SET status='Confirmed' WHERE order_number=%s")
+    elif msg_type == 'return':
+        return send_whatsapp_generic('return', "WHERE shipping_status = 'Failed Delivery'")
+    elif msg_type == 'cancelled':
+        return send_whatsapp_generic('cancelled', "WHERE status = 'Cancelled'")
+    elif msg_type == 'valued':
+        return send_whatsapp_generic('valued', "WHERE customer_type = 'Valued'")
+    elif msg_type == 'tracking':
+        return send_whatsapp_generic('tracking', "WHERE tracking_number != '' AND shipping_status = 'Shipped'")
+    return jsonify({'error': 'Invalid message type'}), 400
 
-@routes.route('/send_return_whatsapp', methods=['POST'])
-def send_return_whatsapp():
-    return send_whatsapp_generic('return', "WHERE shipping_status = 'Failed Delivery'")
 
-@routes.route('/send_cancelled_whatsapp', methods=['POST'])
-def send_cancelled_whatsapp():
-    return send_whatsapp_generic('cancelled', "WHERE status = 'Cancelled'")
+@routes.route('/send_messages', methods=['POST'])
+def send_messages():
+    selected_types = request.form.getlist('message_types')
+    headless_flag = request.form.get('headless')
+    results = []
+    mapping = {
+        'confirmation': ("WHERE status IN ('To Process','Not Responding')", "UPDATE orders SET status='Confirmed' WHERE order_number=%s"),
+        'return': ("WHERE shipping_status = 'Failed Delivery'", None),
+        'cancelled': ("WHERE status = 'Cancelled'", None),
+        'valued': ("WHERE customer_type = 'Valued'", None),
+        'tracking': ("WHERE tracking_number != '' AND shipping_status = 'Shipped'", None)
+    }
+    if not selected_types:
+        return jsonify({'error': 'No message types selected'}), 400
 
-@routes.route('/send_valued_whatsapp', methods=['POST'])
-def send_valued_whatsapp():
-    return send_whatsapp_generic('valued', "WHERE customer_type = 'Valued'")
+    for mt in selected_types:
+        if mt in mapping:
+            where_clause, update_after_send = mapping[mt]
+            res = send_whatsapp_generic(mt, where_clause, update_after_send)
+            try:
+                data = res.get_json()
+            except:
+                data = {}
+            results.append({mt: data})
 
-@routes.route('/send_tracking_whatsapp', methods=['POST'])
-def send_tracking_whatsapp():
-    return send_whatsapp_generic('tracking', "WHERE tracking_number != '' AND shipping_status = 'Shipped'")
+    return jsonify({'message': 'Messages processed', 'details': results})
+
+
 
 @routes.route('/orders/confirm_all', methods=['POST'])
 def confirm_all_orders():
