@@ -26,12 +26,12 @@
 
     <!-- Bulk buttons -->
     <div class="flex items-center gap-2 justify-end">
-      <button id="bulkDeleteBtn"
-              class="bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-red-100">
+      <button id="bulkDeleteBtn" disabled
+              class="bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-red-100 disabled:opacity-50 disabled:pointer-events-none">
         Delete Selected
       </button>
-      <button id="bulkConfirmBtn"
-              class="bg-emerald-600 text-white px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-emerald-700">
+      <button id="bulkConfirmBtn" disabled
+              class="bg-emerald-600 text-white px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:pointer-events-none">
         Confirm Selected
       </button>
     </div>
@@ -60,26 +60,19 @@
           <td class="px-4 py-2">
             <input type="checkbox" class="rowCheck" value="{{ order.id }}" aria-label="Select order {{ order.order_number }}">
           </td>
-
           <td class="px-4 py-2 font-medium text-emerald-600">#{{ order.order_number }}</td>
-
           <td class="px-4 py-2">
             <div class="font-semibold">{{ order.billing_name }}</div>
             <div class="text-[11px] text-gray-500">{{ order.billing_phone }}</div>
           </td>
-
-          <!-- Product: truncated, full on hover -->
           <td class="px-4 py-2">
             <span class="block max-w-[160px] md:max-w-[240px] truncate" title="{{ order.item_name }}">
               {{ order.item_name }}
             </span>
           </td>
-
           <td class="px-4 py-2 font-semibold">PKR {{ "%.2f"|format(order.total) }}</td>
           <td class="px-4 py-2 text-gray-600">{{ order.billing_city }}</td>
           <td class="px-4 py-2 text-gray-600">{{ order.created_at.strftime('%Y-%m-%d') if order.created_at else '' }}</td>
-
-          <!-- Status: inline editable -->
           <td class="px-4 py-2">
             <select class="border border-gray-300 rounded-md px-2 py-1 text-xs"
                     onchange="updateRowStatus({{ order.id }}, this.value)"
@@ -90,8 +83,6 @@
               {% endfor %}
             </select>
           </td>
-
-          <!-- Customer Type (only when Confirmed) -->
           <td class="px-4 py-2">
             {% if order.status == 'Confirmed' %}
               <select class="border border-gray-300 rounded-md px-2 py-1 text-xs"
@@ -105,7 +96,6 @@
               <span class="text-[11px] text-gray-400">—</span>
             {% endif %}
           </td>
-
           <td class="px-4 py-2">
             <button class="border border-gray-300 rounded-md px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
                     onclick="openOrder({{ order.id }})">
@@ -144,6 +134,7 @@
   </div>
 </div>
 
+<!-- SweetAlert2 -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
@@ -153,15 +144,36 @@
 
   // Select all
   const selectAll = $('#selectAll');
+  const bulkDeleteBtn = $('#bulkDeleteBtn');
+  const bulkConfirmBtn = $('#bulkConfirmBtn');
+  const rowCheckboxes = $$('.rowCheck');
+
+  // Function to toggle bulk buttons based on checkbox state
+  function toggleBulkButtons() {
+    const anyChecked = rowCheckboxes.some(cb => cb.checked);
+    bulkDeleteBtn.disabled = !anyChecked;
+    bulkConfirmBtn.disabled = !anyChecked;
+  }
+
+  // Initialize button state
+  toggleBulkButtons();
+
+  // Select all checkbox
   if (selectAll) {
     selectAll.addEventListener('change', () => {
-      $$('.rowCheck').forEach(cb => cb.checked = selectAll.checked);
+      rowCheckboxes.forEach(cb => cb.checked = selectAll.checked);
+      toggleBulkButtons();
     });
   }
 
+  // Individual checkbox listeners
+  rowCheckboxes.forEach(cb => {
+    cb.addEventListener('change', toggleBulkButtons);
+  });
+
   // Front-end search
   const searchInput = $('input[name="q"]');
-  const rows = $$('tbody tr:not([class*="text-center"])'); // Exclude "No orders found" row
+  const rows = $$('tbody tr:not([class*="text-center"])');
 
   searchInput?.addEventListener('input', () => {
     const query = searchInput.value.trim().toLowerCase();
@@ -174,9 +186,9 @@
       const matches = orderNumber.includes(query) || customerName.includes(query) || product.includes(query) || city.includes(query);
       row.style.display = matches ? '' : 'none';
     });
-    // Update "select all" checkbox state
     selectAll.checked = false;
-    $$('.rowCheck').forEach(cb => cb.checked = false);
+    rowCheckboxes.forEach(cb => cb.checked = false);
+    toggleBulkButtons();
   });
 
   function getSelectedIds() {
@@ -192,7 +204,7 @@
         body: JSON.stringify({ status })
       });
       if (!res.ok) throw new Error('Failed to update status');
-      Swal.fire({ icon: 'success', title: 'Updated', text: `Status → ${status}`, timer: 1200, showConfirmButton: false });
+      Swal.fire({ icon: 'success', title: 'Updated', text: `Status → ${status}`, timer: 1200, showConfirmButton: 'false'});
     } catch (e) {
       console.error(e);
       Swal.fire({ icon: 'error', title: 'Error', text: 'Could not update status.' });

@@ -257,13 +257,17 @@
 
   const ctx = canvas.getContext('2d');
 
+  // Bar 1: very light → very dark
   const gradient1 = ctx.createLinearGradient(0, 0, 0, 400);
-  gradient1.addColorStop(0, "#34d399");
-  gradient1.addColorStop(1, "#059669");
+  gradient1.addColorStop(0, "#a7f3d0");  // much lighter emerald (minty)
+  gradient1.addColorStop(1, "#064e3b");  // much darker emerald (deep teal)
 
+  // Bar 2: very dark → very light
   const gradient2 = ctx.createLinearGradient(0, 0, 0, 400);
-  gradient2.addColorStop(0, "#6ee7b7");
-  gradient2.addColorStop(1, "#047857");
+  gradient2.addColorStop(0, "#064e3b");  // much darker emerald (deep teal)
+  gradient2.addColorStop(1, "#a7f3d0");  // much lighter emerald (minty)
+
+
 
   const bgColors = TOP_VALUES.map((_, i) => (i % 2 === 0 ? gradient1 : gradient2));
 
@@ -298,10 +302,19 @@
           displayColors: false
         },
         datalabels: {
-          color: "#fff",
           anchor: "end",
           align: "start",
           font: { weight: "bold" },
+          color: function(ctx) {
+            // Alternate gradients based on index
+            if (ctx.dataIndex % 2 === 0) {
+              // Gradient1 → lighter at top → use dark text
+              return "#111827";  
+            } else {
+              // Gradient2 → darker at top → use white text
+              return "#ffffff";
+            }
+          },
           formatter: function(value) {
             if (value >= 1000) return (value/1000).toFixed(1) + "K";
             return value;
