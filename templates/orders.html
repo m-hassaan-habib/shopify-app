@@ -3,38 +3,46 @@
 {% block content %}
 
 <div class="bg-white rounded-lg shadow p-6">
-  <!-- Header Row -->
+  <!-- Filters + Bulk -->
   <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-3">
-    <div class="flex items-center gap-2 w-full md:w-1/2">
-      <input type="text" placeholder="Search orders, customers, or products..."
-             class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500">
-      <select class="border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500">
-        <option>All Statuses</option>
-        <option>Confirmed</option>
-        <option>Pending</option>
-        <option>Cancelled</option>
-        <option>Failed Delivery</option>
-        <option>Not Responding</option>
-        <option>Valued Customer</option>
-        <option>To Process</option>
+    <!-- Search + Status -->
+    <form id="filtersForm" method="get" class="flex items-center gap-2 w-full md:w-1/2">
+      <input name="q" value="{{ request.args.get('q','') }}"
+             type="search" placeholder="Search orders, customers, products, city, phone…"
+             class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+      {% set current_status = request.args.get('status','All') %}
+      <select name="status" onchange="this.form.submit()"
+              class="border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+        <option value="All" {{ 'selected' if current_status=='All' }}>All Statuses</option>
+        <option value="Confirmed" {{ 'selected' if current_status=='Confirmed' }}>Confirmed</option>
+        <option value="Pending" {{ 'selected' if current_status=='Pending' }}>Pending</option>
+        <option value="Cancelled" {{ 'selected' if current_status=='Cancelled' }}>Cancelled</option>
+        <option value="Failed Delivery" {{ 'selected' if current_status=='Failed Delivery' }}>Failed Delivery</option>
+        <option value="Not Responding" {{ 'selected' if current_status=='Not Responding' }}>Not Responding</option>
+        <option value="Valued" {{ 'selected' if current_status=='Valued' }}>Valued Customer</option>
+        <option value="To Process" {{ 'selected' if current_status=='To Process' }}>To Process</option>
       </select>
-    </div>
+    </form>
+
+    <!-- Bulk buttons -->
     <div class="flex items-center gap-2 justify-end">
-      <button class="bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-red-100">
-        Delete All
+      <button id="bulkDeleteBtn" disabled
+              class="bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-red-100 disabled:opacity-50 disabled:pointer-events-none">
+        Delete Selected
       </button>
-      <button class="bg-green-600 text-white px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-green-700">
-        Confirm All
+      <button id="bulkConfirmBtn" disabled
+              class="bg-emerald-600 text-white px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:pointer-events-none">
+        Confirm Selected
       </button>
     </div>
   </div>
 
   <!-- Orders Table -->
   <div class="overflow-x-auto">
-    <table class="min-w-full border border-gray-200 rounded-lg overflow-hidden">
+    <table class="min-w-full border border-gray-200 rounded-lg overflow-hidden text-sm">
       <thead class="bg-gray-50 text-xs font-semibold text-gray-600 uppercase border-b border-gray-200">
         <tr>
-          <th class="px-4 py-2 text-left"><input type="checkbox"></th>
+          <th class="px-4 py-2 text-left"><input id="selectAll" type="checkbox" aria-label="Select all"></th>
           <th class="px-4 py-2 text-left">Order ID</th>
           <th class="px-4 py-2 text-left">Customer</th>
           <th class="px-4 py-2 text-left">Product</th>
@@ -42,43 +50,66 @@
           <th class="px-4 py-2 text-left">City</th>
           <th class="px-4 py-2 text-left">Date</th>
           <th class="px-4 py-2 text-left">Status</th>
+          <th class="px-4 py-2 text-left">Customer Type</th>
           <th class="px-4 py-2 text-left">Actions</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-gray-100 text-sm">
+      <tbody class="divide-y divide-gray-100">
         {% for order in orders %}
         <tr class="hover:bg-gray-50">
-          <td class="px-4 py-2"><input type="checkbox" value="{{ order.id }}"></td>
-          <td class="px-4 py-2 font-medium text-green-600">#{{ order.order_number }}</td>
-          <td class="px-4 py-2">{{ order.billing_name }}<br><span class="text-xs text-gray-500">{{ order.billing_phone }}</span></td>
-          <td class="px-4 py-2">{{ order.item_name }}</td>
-          <td class="px-4 py-2">${{ "%.2f"|format(order.total) }}</td>
-          <td class="px-4 py-2">{{ order.billing_city }}</td>
-          <td class="px-4 py-2">{{ order.created_at.strftime('%Y-%m-%d') }}</td>
+          <td class="px-4 py-2">
+            <input type="checkbox" class="rowCheck" value="{{ order.id }}" aria-label="Select order {{ order.order_number }}">
+          </td>
+          <td class="px-4 py-2 font-medium text-emerald-600">#{{ order.order_number }}</td>
+          <td class="px-4 py-2">
+            <div class="font-semibold">{{ order.billing_name }}</div>
+            <div class="text-[11px] text-gray-500">{{ order.billing_phone }}</div>
+          </td>
+          <td class="px-4 py-2">
+            <span class="block max-w-[160px] md:max-w-[240px] truncate" title="{{ order.item_name }}">
+              {{ order.item_name }}
+            </span>
+          </td>
+          <td class="px-4 py-2 font-semibold">PKR {{ "%.2f"|format(order.total) }}</td>
+          <td class="px-4 py-2 text-gray-600">{{ order.billing_city }}</td>
+          <td class="px-4 py-2 text-gray-600">{{ order.created_at.strftime('%Y-%m-%d') if order.created_at else '' }}</td>
+          <td class="px-4 py-2">
+            <select class="border border-gray-300 rounded-md px-2 py-1 text-xs"
+                    onchange="updateRowStatus({{ order.id }}, this.value)"
+                    aria-label="Change status for {{ order.order_number }}">
+              {% set s = order.status or '' %}
+              {% for opt in ['Confirmed','Pending','Cancelled','Not Responding','To Process'] %}
+                <option value="{{ opt }}" {{ 'selected' if s==opt }}>{{ opt }}</option>
+              {% endfor %}
+            </select>
+          </td>
           <td class="px-4 py-2">
             {% if order.status == 'Confirmed' %}
-              <span class="badge badge-confirmed">Confirmed</span>
-            {% elif order.status == 'Pending' %}
-              <span class="badge badge-pending">Pending</span>
-            {% elif order.status == 'Cancelled' %}
-              <span class="badge badge-cancelled">Cancelled</span>
-            {% elif order.shipping_status == 'Failed Delivery' %}
-              <span class="badge badge-failed">Failed Delivery</span>
-            {% elif order.status == 'Not Responding' %}
-              <span class="badge badge-notresponding">Not Responding</span>
-            {% elif order.customer_type == 'Valued' %}
-              <span class="badge badge-valued">Valued</span>
-            {% elif order.status == 'To Process' %}
-              <span class="badge badge-toprocess">To Process</span>
+              <select class="border border-gray-300 rounded-md px-2 py-1 text-xs"
+                      onchange="updateCustomerType({{ order.id }}, this.value)"
+                      aria-label="Set customer type for {{ order.order_number }}">
+                {% set ct = order.customer_type or '' %}
+                <option value="" {{ 'selected' if not ct }}>—</option>
+                <option value="Valued" {{ 'selected' if ct=='Valued' }}>Valued</option>
+              </select>
+            {% else %}
+              <span class="text-[11px] text-gray-400">—</span>
             {% endif %}
           </td>
           <td class="px-4 py-2">
-            <button class="bg-gray-50 text-gray-600 border border-gray-200 px-2 py-1 rounded-md text-xs hover:bg-gray-100">Update Status</button>
+            <button class="border border-gray-300 rounded-md px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                    onclick="openOrder({{ order.id }})">
+              View
+            </button>
+            <button class="border border-red-300 text-red-600 rounded-md px-2 py-1 text-xs hover:bg-red-50"
+                    onclick="deleteSingle({{ order.id }})">
+              Delete
+            </button>
           </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="9" class="text-center py-6 text-gray-400">No orders found</td>
+          <td colspan="10" class="text-center py-6 text-gray-400">No orders found</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -86,13 +117,184 @@
   </div>
 
   <!-- Pagination -->
+  {% set q = request.args.get('q','') %}
+  {% set status = request.args.get('status','All') %}
   <div class="flex items-center justify-between mt-4 text-sm text-gray-600">
     <p>Showing {{ orders|length }} of {{ total_orders }} orders</p>
     <div class="flex gap-1">
-      <a href="?page={{ current_page-1 }}" class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 {% if current_page == 1 %}opacity-50 pointer-events-none{% endif %}">Previous</a>
-      <a href="?page={{ current_page+1 }}" class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 {% if current_page == total_pages %}opacity-50 pointer-events-none{% endif %}">Next</a>
+      <a href="?page={{ current_page-1 }}&q={{ q|urlencode }}&status={{ status|urlencode }}"
+         class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 {% if current_page == 1 %}opacity-50 pointer-events-none{% endif %}">
+        Previous
+      </a>
+      <a href="?page={{ current_page+1 }}&q={{ q|urlencode }}&status={{ status|urlencode }}"
+         class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 {% if current_page == total_pages %}opacity-50 pointer-events-none{% endif %}">
+        Next
+      </a>
     </div>
   </div>
 </div>
 
+<!-- SweetAlert2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+  // Helpers
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const $ = (sel, root = document) => root.querySelector(sel);
+
+  // Select all
+  const selectAll = $('#selectAll');
+  const bulkDeleteBtn = $('#bulkDeleteBtn');
+  const bulkConfirmBtn = $('#bulkConfirmBtn');
+  const rowCheckboxes = $$('.rowCheck');
+
+  // Function to toggle bulk buttons based on checkbox state
+  function toggleBulkButtons() {
+    const anyChecked = rowCheckboxes.some(cb => cb.checked);
+    bulkDeleteBtn.disabled = !anyChecked;
+    bulkConfirmBtn.disabled = !anyChecked;
+  }
+
+  // Initialize button state
+  toggleBulkButtons();
+
+  // Select all checkbox
+  if (selectAll) {
+    selectAll.addEventListener('change', () => {
+      rowCheckboxes.forEach(cb => cb.checked = selectAll.checked);
+      toggleBulkButtons();
+    });
+  }
+
+  // Individual checkbox listeners
+  rowCheckboxes.forEach(cb => {
+    cb.addEventListener('change', toggleBulkButtons);
+  });
+
+  // Front-end search
+  const searchInput = $('input[name="q"]');
+  const rows = $$('tbody tr:not([class*="text-center"])');
+
+  searchInput?.addEventListener('input', () => {
+    const query = searchInput.value.trim().toLowerCase();
+    rows.forEach(row => {
+      const cells = $$('td', row);
+      const orderNumber = cells[1].textContent.toLowerCase();
+      const customerName = cells[2].textContent.toLowerCase();
+      const product = cells[3].textContent.toLowerCase();
+      const city = cells[5].textContent.toLowerCase();
+      const matches = orderNumber.includes(query) || customerName.includes(query) || product.includes(query) || city.includes(query);
+      row.style.display = matches ? '' : 'none';
+    });
+    selectAll.checked = false;
+    rowCheckboxes.forEach(cb => cb.checked = false);
+    toggleBulkButtons();
+  });
+
+  function getSelectedIds() {
+    return $$('.rowCheck:checked').map(cb => cb.value);
+  }
+
+  // Inline status update (row)
+  async function updateRowStatus(id, status) {
+    try {
+      const res = await fetch(`/order/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (!res.ok) throw new Error('Failed to update status');
+      Swal.fire({ icon: 'success', title: 'Updated', text: `Status → ${status}`, timer: 1200, showConfirmButton: 'false'});
+    } catch (e) {
+      console.error(e);
+      Swal.fire({ icon: 'error', title: 'Error', text: 'Could not update status.' });
+    }
+  }
+
+  // Inline customer type (row)
+  async function updateCustomerType(id, customer_type) {
+    try {
+      const res = await fetch(`/order/${id}/customer_type`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customer_type })
+      });
+      if (!res.ok) throw new Error('Failed to update customer type');
+      Swal.fire({ icon: 'success', title: 'Updated', text: customer_type ? `Marked as ${customer_type}` : 'Cleared', timer: 1200, showConfirmButton: false });
+    } catch (e) {
+      console.error(e);
+      Swal.fire({ icon: 'error', title: 'Error', text: 'Could not update customer type.' });
+    }
+  }
+
+  // View single
+  async function openOrder(id) {
+    const res = await fetch(`/order/${id}`);
+    const data = await res.json();
+    Swal.fire({
+      title: `Order #${data.order_number}`,
+      html: `
+        <div class="text-left text-sm">
+          <div><b>Customer:</b> ${data.billing_name || ''} (${data.billing_phone || ''})</div>
+          <div><b>Product:</b> ${data.item_name || ''}</div>
+          <div><b>Amount:</b> PKR ${Number(data.total || 0).toFixed(2)}</div>
+          <div><b>Status:</b> ${data.status || ''}</div>
+          <div><b>City:</b> ${data.billing_city || ''}</div>
+        </div>`,
+      confirmButtonColor: '#059669'
+    });
+  }
+
+  // Delete single
+  async function deleteSingle(id) {
+    const ok = await Swal.fire({
+      icon: 'warning', title: 'Delete this order?', showCancelButton: true,
+      confirmButtonText: 'Delete', confirmButtonColor: '#ef4444'
+    });
+    if (!ok.isConfirmed) return;
+    const res = await fetch(`/order/${id}`, { method: 'DELETE' });
+    if (res.ok) location.reload();
+    else Swal.fire({ icon: 'error', title: 'Failed', text: 'Could not delete.' });
+  }
+
+  // Bulk Confirm
+  $('#bulkConfirmBtn')?.addEventListener('click', async () => {
+    const ids = getSelectedIds();
+    if (ids.length) {
+      const ok = await Swal.fire({ icon: 'question', title: 'Confirm selected orders?', showCancelButton: true, confirmButtonColor: '#059669' });
+      if (!ok.isConfirmed) return;
+      const res = await fetch('/orders/bulk_update_status', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, status: 'Confirmed' })
+      });
+      if (res.ok) location.reload();
+      else Swal.fire({ icon: 'error', title: 'Failed', text: 'Could not confirm selected.' });
+    } else {
+      const form = Object.assign(document.createElement('form'), { method: 'POST', action: '/orders/confirm_all' });
+      document.body.appendChild(form);
+      form.submit();
+    }
+  });
+
+  // Bulk Delete
+  $('#bulkDeleteBtn')?.addEventListener('click', async () => {
+    const ids = getSelectedIds();
+    if (ids.length) {
+      const ok = await Swal.fire({ icon: 'warning', title: 'Delete selected orders?', showCancelButton: true, confirmButtonText: 'Delete', confirmButtonColor: '#ef4444' });
+      if (!ok.isConfirmed) return;
+      const res = await fetch('/orders/bulk_delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
+      });
+      if (res.ok) location.reload();
+      else Swal.fire({ icon: 'error', title: 'Failed', text: 'Could not delete selected.' });
+    } else {
+      const ok = await Swal.fire({ icon: 'warning', title: 'Delete ALL orders?', showCancelButton: true, confirmButtonText: 'Delete All', confirmButtonColor: '#ef4444' });
+      if (!ok.isConfirmed) return;
+      const form = Object.assign(document.createElement('form'), { method: 'POST', action: '/orders/delete_all' });
+      document.body.appendChild(form);
+      form.submit();
+    }
+  });
+</script>
 {% endblock %}
