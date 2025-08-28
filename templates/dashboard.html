@@ -193,7 +193,7 @@
             <td class="py-2 px-3 select-text">{{ order.billing_name }}</td>
             <td class="py-2 px-3 font-semibold select-text">PKR {{ order.total }}</td>
             <td class="py-2 px-3 select-text text-gray-500">
-              {{ order.created_at.strftime('%Y-%m-%d') if order.created_at else '' }}
+              {{ order.created_at.strftime('%Y-%m-%d') if order.created_at else None }}
             </td>
             <td class="py-2 px-3">
               <span class="inline-block text-[10px] font-semibold rounded-full px-2 py-0.5 select-none
@@ -204,10 +204,10 @@
                 {{ order.status }}
               </span>
             </td>
-            <td class="py-2 px-3 select-text">{{ order.shipping_status }}</td>
-            <td class="py-2 px-3 select-text">{{ order.courier or order.preferred_courier }}</td>
-            <td class="py-2 px-3 select-text">{{ order.tracking_number }}</td>
-            <td class="py-2 px-3 select-text">{{ order.customer_type }}</td>
+            <td class="py-2 px-3 select-text">{{ order.shipping_status if order.shipping_status else None }}</td>
+            <td class="py-2 px-3 select-text">{{ order.courier or order.preferred_courier if (order.preferred_courier or order.courier) else None }}</td>
+            <td class="py-2 px-3 select-text">{{ order.tracking_number if order.tracking_number else None }}</td>
+            <td class="py-2 px-3 select-text">{{ order.customer_type if order.customer_type else None }}</td>
           </tr>
           {% else %}
           <tr><td class="py-2 px-3" colspan="9">No orders found</td></tr>
@@ -251,100 +251,123 @@
       return lbl.length > n ? lbl.slice(0, n) + '…' : lbl;
     }
 
-(function () {
-  const canvas = document.getElementById('chartTopProducts');
-  if (!canvas || !window.Chart) return;
 
-  const ctx = canvas.getContext('2d');
+    (function () {
+      const canvas = document.getElementById('chartTopProducts');
+      if (!canvas || !window.Chart) return;
 
-  // Bar 1: very light → very dark
-  const gradient1 = ctx.createLinearGradient(0, 0, 0, 400);
-  gradient1.addColorStop(0, "#a7f3d0");  // much lighter emerald (minty)
-  gradient1.addColorStop(1, "#064e3b");  // much darker emerald (deep teal)
+      const ctx = canvas.getContext('2d');
 
-  // Bar 2: very dark → very light
-  const gradient2 = ctx.createLinearGradient(0, 0, 0, 400);
-  gradient2.addColorStop(0, "#064e3b");  // much darker emerald (deep teal)
-  gradient2.addColorStop(1, "#a7f3d0");  // much lighter emerald (minty)
+      // Bar 1: Light to dark gradient (modern emerald tones)
+      const gradient1 = ctx.createLinearGradient(0, 0, 0, 400);
+      gradient1.addColorStop(0, "#6ee7b7"); // Lighter emerald (fresh mint)
+      gradient1.addColorStop(1, "#047857"); // Darker emerald (deep teal)
 
+      // Bar 2: Dark to light gradient (modern emerald tones)
+      const gradient2 = ctx.createLinearGradient(0, 0, 0, 400);
+      gradient2.addColorStop(0, "#047857"); // Darker emerald (deep teal)
+      gradient2.addColorStop(1, "#6ee7b7"); // Lighter emerald (fresh mint)
 
+      const bgColors = TOP_VALUES.map((_, i) => (i % 2 === 0 ? gradient1 : gradient2));
 
-  const bgColors = TOP_VALUES.map((_, i) => (i % 2 === 0 ? gradient1 : gradient2));
-
-  new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: TOP_LABELS,
-      datasets: [{
-        data: TOP_VALUES,
-        backgroundColor: bgColors,
-        borderWidth: 0,
-          borderRadius: {
-            topLeft: 10,
-            topRight: 10,
-            bottomLeft: 0,
-            bottomRight: 0
-          },
-        borderSkipped: false
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: "#111827",
-          titleColor: "#fff",
-          bodyColor: "#d1d5db",
-          padding: 8,
-          cornerRadius: 6,
-          displayColors: false
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: TOP_LABELS,
+          datasets: [{
+            data: TOP_VALUES,
+            backgroundColor: bgColors,
+            borderWidth: 0,
+            borderRadius: {
+              topLeft: 12,
+              topRight: 12,
+              bottomLeft: 0,
+              bottomRight: 0
+            },
+            borderSkipped: false
+          }]
         },
-        datalabels: {
-          anchor: "end",
-          align: "start",
-          font: { weight: "bold" },
-          color: function(ctx) {
-            // Alternate gradients based on index
-            if (ctx.dataIndex % 2 === 0) {
-              // Gradient1 → lighter at top → use dark text
-              return "#111827";  
-            } else {
-              // Gradient2 → darker at top → use white text
-              return "#ffffff";
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: {
+            padding: 15
+          },
+          animation: {
+            duration: 1000,
+            easing: 'easeOutQuart' // Smooth modern animation
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: "rgba(17, 24, 39, 0.9)", // Darker, semi-transparent
+              titleColor: "#fff",
+              bodyColor: "#e5e7eb",
+              padding: 12,
+              cornerRadius: 8,
+              displayColors: false,
+              borderColor: "rgba(255, 255, 255, 0.1)",
+              borderWidth: 1,
+              titleFont: { family: "'Inter', sans-serif", size: 14, weight: "600" },
+              bodyFont: { family: "'Inter', sans-serif", size: 12 }
+            },
+            datalabels: {
+              anchor: "end",
+              align: "start",
+              font: { 
+                family: "'Inter', sans-serif",
+                size: 12,
+                weight: "600"
+              },
+              color: function(ctx) {
+                return ctx.dataIndex % 2 === 0 ? "#111827" : "#ffffff";
+              },
+              formatter: function(value) {
+                if (value >= 1000) return (value/1000).toFixed(1) + "K";
+                return value;
+              },
+              padding: { top: 4 }
             }
           },
-          formatter: function(value) {
-            if (value >= 1000) return (value/1000).toFixed(1) + "K";
-            return value;
+          scales: {
+            x: {
+              ticks: {
+                color: "#4b5563",
+                font: { 
+                  family: "'Inter', sans-serif",
+                  size: 12,
+                  weight: "500"
+                },
+                callback: function(val, index) {
+                  let lbl = this.getLabelForValue(val);
+                  return lbl.length > 12 ? lbl.slice(0, 12) + "…" : lbl;
+                }
+              },
+              grid: { display: false },
+              border: { color: "rgba(209, 213, 219, 0.5)" }
+            },
+            y: {
+              beginAtZero: true,
+              min: 0, // Ensure no negative drop
+              ticks: { 
+                color: "#4b5563",
+                font: { 
+                  family: "'Inter', sans-serif",
+                  size: 12,
+                  weight: "500"
+                },
+                stepSize: 10 // Smoother increments
+              },
+              grid: { 
+                color: "rgba(209, 213, 219, 0.3)", // Subtle grid
+                drawBorder: false
+              }
+            }
           }
-        }
-      },
-      scales: {
-        x: {
-          ticks: {
-            color: "#374151",
-            font: { size: 11, weight: "500" },
-            callback: function(val, index) {
-              let lbl = this.getLabelForValue(val);
-              return lbl.length > 12 ? lbl.slice(0, 12) + "…" : lbl;
-            }
-          },
-          grid: { display: false }
         },
-        y: {
-          beginAtZero: true,
-          ticks: { color: "#6b7280" },
-          grid: { color: "#fff" }
-        }
-      }
-    },
-    plugins: [ChartDataLabels]
-  });
-})();
-
-
+        plugins: [ChartDataLabels]
+      });
+    })();
     // ---- Orders Over Time (LINE with gradient) ----
     (function () {
       const canvas = document.getElementById('chartOrdersOverTime');
