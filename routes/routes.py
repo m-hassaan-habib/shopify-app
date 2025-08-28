@@ -211,19 +211,42 @@ def dashboard():
 
 @routes.route('/orders')
 def orders():
-    page = int(request.args.get('page', 1))
+    page = max(int(request.args.get('page', 1)), 1)
     per_page = 10
     offset = (page - 1) * per_page
 
+    q = (request.args.get('q') or '').strip()
+    status = (request.args.get('status') or 'All').strip()
+
+    where = []
+    params = []
+
+    if q:
+        where.append("(order_number LIKE %s OR billing_name LIKE %s OR item_name LIKE %s OR billing_city LIKE %s OR billing_phone LIKE %s)")
+        like = f"%{q}%"
+        params.extend([like, like, like, like, like])
+
+    if status and status != 'All':
+        if status == 'Valued':
+            where.append("customer_type = %s")
+            params.append('Valued')
+        else:
+            # match either order status or shipping status
+            where.append("(status = %s OR shipping_status = %s)")
+            params.extend([status, status])
+
+    where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+
     conn = get_connection()
     with conn.cursor() as cursor:
-        # Fetch paginated orders
-        cursor.execute("SELECT * FROM orders ORDER BY id DESC LIMIT %s OFFSET %s", (per_page, offset))
-        orders = cursor.fetchall()
-
-        # Count totals
-        cursor.execute("SELECT COUNT(*) AS total FROM orders")
+        cursor.execute(f"SELECT COUNT(*) AS total FROM orders{where_sql}", params)
         total_orders = cursor.fetchone()['total']
+
+        cursor.execute(
+            f"SELECT * FROM orders{where_sql} ORDER BY id DESC LIMIT %s OFFSET %s",
+            params + [per_page, offset]
+        )
+        orders = cursor.fetchall()
 
     total_pages = (total_orders + per_page - 1) // per_page
 
@@ -234,6 +257,38 @@ def orders():
         current_page=page,
         total_pages=total_pages
     )
+
+
+@routes.route('/orders/bulk_update_status', methods=['POST'])
+def bulk_update_status():
+    data = request.get_json(force=True, silent=True) or {}
+    ids = data.get('ids') or []
+    status = data.get('status')
+    if not ids or not status:
+        return jsonify({"error": "ids and status are required"}), 400
+
+    # Build placeholders safely for MySQL
+    placeholders = ",".join(["%s"] * len(ids))
+    conn = get_connection()
+    with conn.cursor() as cursor:
+        cursor.execute(f"UPDATE orders SET status = %s WHERE id IN ({placeholders})", [status] + ids)
+        conn.commit()
+    return jsonify({"updated": len(ids), "status": status})
+
+
+@routes.route('/orders/bulk_delete', methods=['POST'])
+def bulk_delete():
+    data = request.get_json(force=True, silent=True) or {}
+    ids = data.get('ids') or []
+    if not ids:
+        return jsonify({"error": "ids are required"}), 400
+
+    placeholders = ",".join(["%s"] * len(ids))
+    conn = get_connection()
+    with conn.cursor() as cursor:
+        cursor.execute(f"DELETE FROM orders WHERE id IN ({placeholders})", ids)
+        conn.commit()
+    return jsonify({"deleted": len(ids)})
 
 
 @routes.route('/order/<int:order_id>', methods=['GET'])
@@ -653,3 +708,8 @@ def create_template():
             conn.commit()
         flash("Template created", "success")
     return redirect(url_for('routes.list_templates'))
+
+
+@routes.route('/customers')
+def customers():
+    return render_template("customers.html")
