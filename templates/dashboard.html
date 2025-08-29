@@ -260,13 +260,13 @@
 
       // Bar 1: Light to dark gradient (modern emerald tones)
       const gradient1 = ctx.createLinearGradient(0, 0, 0, 400);
-      gradient1.addColorStop(0, "#6ee7b7"); // Lighter emerald (fresh mint)
-      gradient1.addColorStop(1, "#047857"); // Darker emerald (deep teal)
+      gradient1.addColorStop(0, "#079669"); // Lighter emerald (fresh mint)
+      gradient1.addColorStop(1, "#079669"); // Darker emerald (deep teal)
 
       // Bar 2: Dark to light gradient (modern emerald tones)
       const gradient2 = ctx.createLinearGradient(0, 0, 0, 400);
-      gradient2.addColorStop(0, "#047857"); // Darker emerald (deep teal)
-      gradient2.addColorStop(1, "#6ee7b7"); // Lighter emerald (fresh mint)
+      gradient2.addColorStop(0, "#079669"); // Darker emerald (deep teal)
+      gradient2.addColorStop(1, "#079669"); // Lighter emerald (fresh mint)
 
       const bgColors = TOP_VALUES.map((_, i) => (i % 2 === 0 ? gradient1 : gradient2));
 
@@ -308,7 +308,7 @@
               displayColors: false,
               borderColor: "rgba(255, 255, 255, 0.1)",
               borderWidth: 1,
-              titleFont: { family: "'Inter', sans-serif", size: 14, weight: "600" },
+              titleFont: { family: "'Inter', sans-serif", size: 10, weight: "400" },
               bodyFont: { family: "'Inter', sans-serif", size: 12 }
             },
             datalabels: {
@@ -320,7 +320,7 @@
                 weight: "600"
               },
               color: function(ctx) {
-                return ctx.dataIndex % 2 === 0 ? "#111827" : "#ffffff";
+                return ctx.dataIndex % 2 === 0 ? "#111827" : "#111827";
               },
               formatter: function(value) {
                 if (value >= 1000) return (value/1000).toFixed(1) + "K";
@@ -335,7 +335,7 @@
                 color: "#4b5563",
                 font: { 
                   family: "'Inter', sans-serif",
-                  size: 12,
+                  size: 10,
                   weight: "500"
                 },
                 callback: function(val, index) {
@@ -368,6 +368,7 @@
         plugins: [ChartDataLabels]
       });
     })();
+
     // ---- Orders Over Time (LINE with gradient) ----
     (function () {
       const canvas = document.getElementById('chartOrdersOverTime');
