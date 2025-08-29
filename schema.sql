@@ -69,6 +69,15 @@ INSERT IGNORE INTO message_templates (template_name, content) VALUES
 ('tracking_order_lines', '["Track your parcel with this number."]'),
 ('tracking_closings', '["Happy shopping."]');
 
+
+INSERT INTO message_templates (template_name, content) VALUES
+ ('greetings', '["Assalam o Alaikum","Salam","Hello","Hi there","Dear Customer","Respected Customer","Good day","Warm greetings"]'),
+ ('intros', '["Hum Mihraaj Ventures se rabta kar rahe hain.", "Aap se Mihraaj Ventures ki team baat kar rahi hai.", "Yeh message Mihraaj Ventures ki taraf se hai.", "We are reaching out from Mihraaj Ventures.", "This is a follow-up from Mihraaj Ventures.", "You’re receiving this message from Mihraaj Ventures regarding your recent order.", "Ham aap se Mihraaj Ventures ki taraf se raabta kar rahe hain."]'),
+('order_lines', '["Aap ne hamari website se {product} ka order diya tha (Order #{order_num}) aur raqam PKR {price}.", "{product} ka order mila hai—Order #{order_num}, amount: PKR {price}.", "Aap ka order {product} (#{order_num}) humay receive hua hai. Total payment: PKR {price}.", "We received your order for {product} (#{order_num}). Total: PKR {price}.", "Your order #{order_num} of {product} has been placed. Amount due: PKR {price}."]'),
+('confirmation_requests', '["Meherbani kar ke order confirm kar dein.", "Kindly order ki tasdeeq kar dein.", "Barah-e-karam order ki confirmation kar dein.", "Please confirm your order so we can proceed.", "We kindly request you to confirm your order.", "To process your order quickly, please confirm it.", "Order confirm kar dein taake delivery jald shuru ki ja sake."]'),
+('closings', '["Shukriya.", "Bohat shukriya!", "Allah Hafiz.", "Thanks from Mihraaj Ventures!", "We appreciate your response.", "Looking forward to your confirmation.", "Stay safe and thank you!", "Thank you for choosing Mihraaj Ventures."]');
+
+
 ALTER TABLE orders
   ADD COLUMN customer_key VARCHAR(512)
   GENERATED ALWAYS AS (
