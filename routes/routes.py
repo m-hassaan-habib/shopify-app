@@ -392,7 +392,7 @@ def import_csv():
                 except Exception as err:
                     flash(f"Row {idx} date parsing failed: {row['Created at']} → {err}", "warning")
                     logger.warning(f"Row {idx} datetime parse failed: {err}")
-                    created_at = datetime.datetime.now()
+                    created_at = datetime.now()
                 record = (
                     row.get('Order placed', 'Shopify'),
                     row.get('Order #', '').strip(),
@@ -974,11 +974,6 @@ def create_template():
     return render_template('edit_template.html', template=template, items=items)
 
 
-@routes.route('/customers')
-def customers():
-    return render_template("customers.html")
-
-
 def _parse_lines(content):
     try:
         arr = json.loads(content or "[]")
@@ -990,3 +985,389 @@ def _parse_lines(content):
 
 def _join_preview(lines):
     return "\n".join([s for s in (lines or []) if str(s).strip()])
+
+
+# ========= Customers (derived from orders) =========
+
+from datetime import datetime, timedelta
+from flask import send_file
+import io
+import csv
+
+def _customers_base_sql():
+    # Aggregates by a "customer key" (phone if present, otherwise NAME:<name>)
+    # Pulls latest city/customer_type/preferred_courier via correlated subqueries.
+    return """
+      SELECT
+        cust_key,
+        MAX(billing_name)                        AS billing_name,
+        MAX(NULLIF(billing_phone,''))            AS billing_phone,
+        COUNT(*)                                 AS total_orders,
+        COALESCE(SUM(total),0)                   AS total_spent,
+        MIN(COALESCE(created_at, NOW()))         AS first_order,
+        MAX(COALESCE(created_at, NOW()))         AS last_order,
+        (
+          SELECT o2.billing_city FROM orders o2
+          WHERE (CASE WHEN o2.billing_phone IS NOT NULL AND o2.billing_phone<>'' 
+                      THEN o2.billing_phone ELSE CONCAT('NAME:', o2.billing_name) END) = cust_key
+          ORDER BY COALESCE(o2.created_at, NOW()) DESC, o2.id DESC
+          LIMIT 1
+        ) AS billing_city,
+        (
+          SELECT o2.customer_type FROM orders o2
+          WHERE (CASE WHEN o2.billing_phone IS NOT NULL AND o2.billing_phone<>'' 
+                      THEN o2.billing_phone ELSE CONCAT('NAME:', o2.billing_name) END) = cust_key
+          ORDER BY COALESCE(o2.created_at, NOW()) DESC, o2.id DESC
+          LIMIT 1
+        ) AS customer_type,
+        (
+          SELECT o2.preferred_courier FROM orders o2
+          WHERE (CASE WHEN o2.billing_phone IS NOT NULL AND o2.billing_phone<>'' 
+                      THEN o2.billing_phone ELSE CONCAT('NAME:', o2.billing_name) END) = cust_key
+          ORDER BY COALESCE(o2.created_at, NOW()) DESC, o2.id DESC
+          LIMIT 1
+        ) AS preferred_courier
+      FROM (
+        SELECT
+          CASE WHEN billing_phone IS NOT NULL AND billing_phone<>'' 
+               THEN billing_phone ELSE CONCAT('NAME:', billing_name) END AS cust_key,
+          billing_name, billing_phone, total, created_at
+        FROM orders
+      ) t
+      GROUP BY cust_key
+    """
+
+def _customers_counts(conn):
+    base_sql = _customers_base_sql()
+    with conn.cursor() as c:
+        # total customers
+        c.execute(f"SELECT COUNT(*) AS c FROM ({base_sql}) AS custs")
+        total = c.fetchone()['c']
+
+        # valued
+        c.execute(f"SELECT COUNT(*) AS c FROM ({base_sql}) AS custs WHERE customer_type='Valued'")
+        valued = c.fetchone()['c']
+
+        # new (first order within last 30 days)
+        c.execute(f"SELECT COUNT(*) AS c FROM ({base_sql}) AS custs WHERE first_order >= (NOW() - INTERVAL 30 DAY)")
+        new30 = c.fetchone()['c']
+
+        # inactive (last order older than 30 days)
+        c.execute(f"SELECT COUNT(*) AS c FROM ({base_sql}) AS custs WHERE last_order < (NOW() - INTERVAL 30 DAY)")
+        inactive = c.fetchone()['c']
+
+    return total, valued, new30, inactive
+
+def _fetch_customers(conn, q, segment, page, per_page):
+    base_sql = _customers_base_sql()
+    outer = f"SELECT * FROM ({base_sql}) AS custs"
+    where = []
+    params = []
+
+    if q:
+        like = f"%{q}%"
+        where.append("(billing_name LIKE %s OR billing_phone LIKE %s OR billing_city LIKE %s)")
+        params += [like, like, like]
+
+    if segment == 'Valued':
+        where.append("customer_type='Valued'")
+    elif segment == 'New':
+        where.append("first_order >= (NOW() - INTERVAL 30 DAY)")
+    elif segment == 'Inactive':
+        where.append("last_order < (NOW() - INTERVAL 30 DAY)")
+    # 'All' => no extra clause
+
+    where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+    order_sql = " ORDER BY last_order DESC"
+
+    # count for pagination
+    with conn.cursor() as c:
+        c.execute(f"SELECT COUNT(*) AS c FROM ({base_sql}) AS custs{where_sql}", params)
+        total_filtered = c.fetchone()['c']
+
+    offset = (page - 1) * per_page
+    with conn.cursor() as c:
+        c.execute(f"{outer}{where_sql}{order_sql} LIMIT %s OFFSET %s", params + [per_page, offset])
+        rows = c.fetchall()
+
+    # enhance rows for UI
+    now = datetime.now()
+    enhanced = []
+    for r in rows:
+        name = (r.get('billing_name') or '').strip() or '—'
+        # initials
+        initials = ''.join([p[0] for p in name.split()[:2] if p])[:2].upper() or 'CU'
+        # badge
+        last_order = r.get('last_order')
+        first_order = r.get('first_order')
+        total_orders = int(r.get('total_orders') or 0)
+
+        # compute ages safely
+        def _days(dt):
+            try:
+                return (now - dt).days
+            except Exception:
+                return 0
+
+        days_since_last = _days(last_order) if last_order else 0
+        days_since_first = _days(first_order) if first_order else 0
+
+        if (r.get('customer_type') or '') == 'Valued':
+            badge = ('Valued', 'bg-orange-100 text-orange-500')
+        elif days_since_last > 30:
+            badge = ('Inactive', 'bg-gray-200 text-gray-500')
+        elif days_since_first <= 30:
+            badge = ('New', 'bg-green-100 text-green-600')
+        else:
+            badge = ('Regular', 'bg-green-100 text-green-600')
+
+        # human "ago"
+        def human_ago(d):
+            if d <= 1: return "1 day ago"
+            if d < 7:  return f"{d} days ago"
+            w = d // 7
+            if w == 1: return "1 week ago"
+            if w < 5:  return f"{w} weeks ago"
+            m = d // 30
+            if m <= 1: return "1 month ago"
+            return f"{m} months ago"
+
+        enhanced.append({
+            **r,
+            'initials': initials,
+            'badge_label': badge[0],
+            'badge_class': badge[1],
+            'joined_date': (first_order.strftime('%Y-%m-%d') if first_order else '—'),
+            'last_order_ago': human_ago(days_since_last) if last_order else '—',
+            'total_spent_fmt': f"PKR {float(r.get('total_spent') or 0):,.2f}",
+        })
+
+    return enhanced, total_filtered
+# routes/routes.py  (drop-in replacement for your /customers)
+from flask import Blueprint, render_template, request, jsonify
+from models.db import get_connection
+from datetime import datetime, date
+
+# ... existing imports & blueprint setup ...
+
+@routes.route('/customers')
+def customers():
+    # -------- params ----------
+    page      = max(int(request.args.get('page', 1) or 1), 1)
+    per_page  = max(int(request.args.get('per_page', 18) or 18), 1)   # 6 x 3 cards by default
+    q         = (request.args.get('q') or '').strip()
+    segment   = (request.args.get('segment') or 'All').strip()  # All | Valued | Inactive30 | New | Regular
+
+    offset = (page - 1) * per_page
+
+    # -------- WHERE pieces (applied to the "latest snapshot" l and aggregates a) ----------
+    where_sql = []
+    params = []
+
+    # text search on latest name/phone/city (keeps it snappy and intuitive)
+    if q:
+        like = f"%{q}%"
+        where_sql.append("(l.billing_name LIKE %s OR l.billing_phone LIKE %s OR l.billing_city LIKE %s)")
+        params.extend([like, like, like])
+
+    # segment filter
+    if segment == 'Valued':
+        where_sql.append("l.customer_type = 'Valued'")
+    elif segment == 'Inactive30':
+        where_sql.append("a.last_order_at < (NOW() - INTERVAL 30 DAY)")
+    elif segment == 'New':
+        # Joined this month (first order)
+        where_sql.append("a.joined_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')")
+    elif segment == 'Regular':
+        where_sql.append("""
+            ( (l.customer_type IS NULL OR l.customer_type <> 'Valued')
+              AND a.last_order_at >= (NOW() - INTERVAL 30 DAY)
+              AND a.joined_at < DATE_FORMAT(CURDATE(), '%Y-%m-01') )
+        """)
+    # else: All (no extra condition)
+
+    where_clause = ("WHERE " + " AND ".join(where_sql)) if where_sql else ""
+
+    # -------- main page query (one row per customer for current page) ----------
+    # Uses CTEs and window function to grab latest row per customer_key.
+    main_sql = f"""
+    WITH base AS (
+        SELECT
+            id, customer_key, billing_name, billing_phone, billing_city, billing_street,
+            preferred_courier, customer_type, created_at, total,
+            ROW_NUMBER() OVER (PARTITION BY customer_key ORDER BY created_at DESC, id DESC) AS rn
+        FROM orders
+    ),
+    latest AS (
+        SELECT *
+        FROM base
+        WHERE rn = 1
+    ),
+    agg AS (
+        SELECT
+            customer_key,
+            COUNT(*)               AS orders_count,
+            SUM(total)             AS total_spent,
+            MIN(created_at)        AS joined_at,
+            MAX(created_at)        AS last_order_at
+        FROM orders
+        GROUP BY customer_key
+    )
+    SELECT
+        l.customer_key,
+        l.billing_name,
+        l.billing_phone,
+        l.billing_city,
+        l.billing_street,
+        l.preferred_courier,
+        l.customer_type,
+        a.orders_count,
+        a.total_spent,
+        a.joined_at,
+        a.last_order_at
+    FROM latest l
+    JOIN agg a USING (customer_key)
+    {where_clause}
+    ORDER BY a.last_order_at DESC
+    LIMIT %s OFFSET %s
+    """
+
+    # -------- count query (total customers after filters) ----------
+    count_sql = f"""
+    WITH base AS (
+        SELECT
+            id, customer_key, billing_name, billing_phone, billing_city, customer_type, created_at,
+            ROW_NUMBER() OVER (PARTITION BY customer_key ORDER BY created_at DESC, id DESC) AS rn
+        FROM orders
+    ),
+    latest AS (
+        SELECT * FROM base WHERE rn = 1
+    ),
+    agg AS (
+        SELECT
+            customer_key,
+            MIN(created_at) AS joined_at,
+            MAX(created_at) AS last_order_at
+        FROM orders
+        GROUP BY customer_key
+    )
+    SELECT COUNT(*) AS cnt
+    FROM latest l
+    JOIN agg a USING (customer_key)
+    {where_clause}
+    """
+
+    # -------- summary cards (computed with indexed fields) ----------
+    summary_sql = {
+        "total": """
+            SELECT COUNT(*) AS c FROM (
+              SELECT customer_key FROM orders GROUP BY customer_key
+            ) x
+        """,
+        "valued": """
+            SELECT COUNT(*) AS c FROM (
+              SELECT customer_key
+              FROM orders
+              GROUP BY customer_key
+              HAVING MAX(customer_type = 'Valued') = 1
+            ) x
+        """,
+        "new_month": """
+            SELECT COUNT(*) AS c FROM (
+              SELECT customer_key, MIN(created_at) AS joined_at
+              FROM orders
+              GROUP BY customer_key
+              HAVING joined_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+            ) x
+        """,
+        "inactive30": """
+            SELECT COUNT(*) AS c FROM (
+              SELECT customer_key, MAX(created_at) AS last_at
+              FROM orders
+              GROUP BY customer_key
+              HAVING last_at < (NOW() - INTERVAL 30 DAY)
+            ) x
+        """
+    }
+
+    conn = get_connection()
+    with conn.cursor() as c:
+        # main page data
+        c.execute(main_sql, params + [per_page, offset])
+        rows = c.fetchall()
+
+        # total count
+        c.execute(count_sql, params)
+        total_customers_filtered = c.fetchone()['cnt']
+
+        # summary cards
+        c.execute(summary_sql["total"]);     total_customers = c.fetchone()['c']
+        c.execute(summary_sql["valued"]);    valued_customers = c.fetchone()['c']
+        c.execute(summary_sql["new_month"]); new_this_month  = c.fetchone()['c']
+        c.execute(summary_sql["inactive30"]);inactive_30     = c.fetchone()['c']
+
+    total_pages = max((total_customers_filtered + per_page - 1) // per_page, 1)
+
+    enriched = []
+    now = datetime.utcnow()
+    for r in rows:
+        badge = 'Regular'
+        if r['customer_type'] == 'Valued':
+            badge = 'Valued'
+        elif r['last_order_at'] and (now - r['last_order_at']).days > 30:
+            badge = 'Inactive'
+        elif r['joined_at'] and r['joined_at'].date() >= date.today().replace(day=1):
+            badge = 'New'
+        enriched.append({**r, 'badge': badge})
+
+    return render_template(
+        'customers.html',
+        customers=enriched,
+        q=q,
+        segment=segment,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages,
+        total_filtered=total_customers_filtered,
+        cards={
+            "total": total_customers,
+            "valued": valued_customers,
+            "new_month": new_this_month,
+            "inactive30": inactive_30
+        }
+    )
+
+
+@routes.route('/customers/export')
+def customers_export():
+    # export with current filters
+    q = (request.args.get('q') or '').strip()
+    segment = (request.args.get('segment') or 'All').strip()
+
+    conn = get_connection()
+    # get all (no pagination) for export
+    rows, _ = _fetch_customers(conn, q, segment, page=1, per_page=10_000_000)
+
+    # CSV in-memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'Name','Phone','City','Customer Type','Preferred Courier',
+        'First Order','Last Order','Total Orders','Total Spent'
+    ])
+    for r in rows:
+        writer.writerow([
+            r.get('billing_name') or '',
+            r.get('billing_phone') or '',
+            r.get('billing_city') or '',
+            r.get('customer_type') or '',
+            r.get('preferred_courier') or '',
+            r.get('first_order') or '',
+            r.get('last_order') or '',
+            r.get('total_orders') or 0,
+            f"{float(r.get('total_spent') or 0):.2f}"
+        ])
+    mem = io.BytesIO(output.getvalue().encode('utf-8'))
+    mem.seek(0)
+    filename = 'customers_export.csv'
+    return send_file(mem, mimetype='text/csv', as_attachment=True, download_name=filename)

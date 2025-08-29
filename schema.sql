@@ -68,3 +68,23 @@ INSERT IGNORE INTO message_templates (template_name, content) VALUES
 ('tracking_intros', '["Your order has been shipped."]'),
 ('tracking_order_lines', '["Track your parcel with this number."]'),
 ('tracking_closings', '["Happy shopping."]');
+
+ALTER TABLE orders
+  ADD COLUMN customer_key VARCHAR(512)
+  GENERATED ALWAYS AS (
+    COALESCE(
+      NULLIF(TRIM(billing_phone), ''),
+      CONCAT('N:', COALESCE(TRIM(billing_name),''), '|C:', COALESCE(TRIM(billing_city),''))
+    )
+  ) STORED;
+
+
+CREATE INDEX idx_orders_customer_key           ON orders (customer_key);
+CREATE INDEX idx_orders_created_at             ON orders (created_at);
+CREATE INDEX idx_orders_customer_type          ON orders (customer_type);
+CREATE INDEX idx_orders_key_created_id         ON orders (customer_key, created_at, id);
+
+CREATE INDEX idx_orders_billing_city           ON orders (billing_city);
+CREATE INDEX idx_orders_billing_phone          ON orders (billing_phone);
+
+ALTER TABLE orders ADD FULLTEXT idx_orders_fulltext (billing_name, billing_city);
